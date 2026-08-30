@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>Fragify Esports — Tournament Registration</title>
+  <meta name="description" content="Register your team for the Fragify Esports tournament. Only 16 slots. First come, first frag." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Animated backdrop -->
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow bg-glow--1" aria-hidden="true"></div>
+  <div class="bg-glow bg-glow--2" aria-hidden="true"></div>
+
+  <header class="nav">
+    <div class="nav__brand">
+      <div class="nav__icon">
+        <span>⚡</span>
+      </div>
+      <span class="nav__name">FRAGIFY<span class="accent"> ESPORTS</span></span>
+    </div>
+    <div class="nav__status" id="navStatus">
+      <span class="dot"></span>
+      <span id="navStatusText">Registration Live</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <p class="hero__eyebrow">// SEASON 01 · SQUAD SHOWDOWN</p>
+      <h1 class="hero__title">
+        REGISTER YOUR SQUAD.<br />
+        <span class="accent">CLAIM YOUR SLOT.</span>
+      </h1>
+      <p class="hero__sub">
+        Only <strong>16 teams</strong> make it in. Registration closes the moment the last
+        slot is gone. Lock in your squad, get your slot number, and drop into the WhatsApp
+        community for your room ID &amp; password.
+      </p>
+
+      <!-- SLOTS COUNTER -->
+      <div class="slots">
+        <div class="slots__meter">
+          <div class="slots__fill" id="slotsFill"></div>
+        </div>
+        <div class="slots__labels">
+          <span><strong id="slotsTaken">0</strong> / <span id="slotsTotal">16</span> slots filled</span>
+          <span class="slots__left" id="slotsLeft">16 left</span>
+        </div>
+      </div>
+
+      <a href="#register" class="btn btn--primary hero__cta" id="heroCta">Register Now →</a>
+    </section>
+
+    <!-- INFO CARDS -->
+    <section class="cards">
+      <div class="card">
+        <div class="card__icon">🎯</div>
+        <h3>16 Teams Only</h3>
+        <p>Hard cap. When the 16th team registers, the gate auto-locks. No exceptions.</p>
+      </div>
+      <div class="card">
+        <div class="card__icon">🎟️</div>
+        <h3>Instant Slot</h3>
+        <p>Your slot number is assigned the second you register. Shown on screen instantly.</p>
+      </div>
+      <div class="card">
+        <div class="card__icon">💬</div>
+        <h3>WhatsApp Community</h3>
+        <p>Get the community invite link with your room ID &amp; password after registering.</p>
+      </div>
+    </section>
+
+    <!-- REGISTRATION -->
+    <section class="register" id="register">
+      <div class="register__head">
+        <h2>Team Registration</h2>
+        <p>Fill in your squad details. One entry per team.</p>
+      </div>
+
+      <form id="regForm" class="form" novalidate>
+        <div class="field">
+          <label for="teamName">Team Name <span class="req">*</span></label>
+          <input type="text" id="teamName" name="teamName" placeholder="e.g. Team Phantom" autocomplete="off" required />
+          <small class="field__error" data-for="teamName"></small>
+        </div>
+
+        <div class="field">
+          <label for="leaderName">Team Leader (IGN) <span class="req">*</span></label>
+          <input type="text" id="leaderName" name="leaderName" placeholder="In-game name of captain" autocomplete="off" required />
+          <small class="field__error" data-for="leaderName"></small>
+        </div>
+
+        <div class="field">
+          <label for="phone">WhatsApp Number <span class="req">*</span></label>
+          <input type="tel" id="phone" name="phone" placeholder="10-digit mobile number" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required />
+          <small class="field__error" data-for="phone"></small>
+        </div>
+
+        <button type="submit" class="btn btn--primary form__submit" id="submitBtn">
+          Lock My Slot →
+        </button>
+        <p class="form__note">By registering you agree to the tournament rules &amp; fair-play policy.</p>
+      </form>
+
+      <!-- CLOSED STATE (hidden until full) -->
+      <div class="closed" id="closedState" hidden>
+        <div class="closed__icon">🔒</div>
+        <h2>Registration Closed</h2>
+        <p>All 16 slots are filled. Follow us for the next season drop.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- SUCCESS MODAL -->
+  <div class="modal" id="successModal" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal__badge">✅ You're In!</div>
+      <h2 id="modalTitle">Slot <span class="accent" id="slotNumber">#00</span> is yours</h2>
+      <p class="modal__team" id="modalTeam">Team Phantom</p>
+
+      <div class="creds">
+        <div class="creds__row">
+          <span class="creds__label">Team ID</span>
+          <span class="creds__value" id="credId">FRG-000</span>
+        </div>
+        <div class="creds__row">
+          <span class="creds__label">Password</span>
+          <span class="creds__value" id="credPass">••••••</span>
+        </div>
+      </div>
+
+      <a href="#" target="_blank" rel="noopener" class="btn btn--whatsapp" id="waLink">
+        💬 Join WhatsApp Community
+      </a>
+      <p class="modal__hint">Save your Team ID &amp; Password. You'll need them in the community for your room details.</p>
+      <button class="modal__close" id="modalClose">Done</button>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>© <span id="year"></span> Fragify Esports · Built for the grind.</p>
+  </footer>
+
+  <!-- ADMIN PANEL (hidden by default) -->
+  <div class="admin-panel" id="adminPanel" hidden>
+    <div class="admin-backdrop" id="adminBackdrop"></div>
+    <div class="admin-card">
+      <h2>🔐 Admin Panel</h2>
+      <div class="admin-menu">
+        <button class="admin-btn" id="adminViewBtn">📋 View All Registrations</button>
+        <button class="admin-btn" id="adminLinkBtn">🔗 Update WhatsApp Link</button>
+        <button class="admin-btn admin-btn--danger" id="adminResetBtn">🗑️ Reset All Slots</button>
+      </div>
+      <button class="admin-close" id="adminCloseBtn">Close</button>
+    </div>
+  </div>
+
+  <!-- REGISTRATIONS MODAL -->
+  <div class="modal" id="regModal" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__card" style="max-width: 600px; text-align: left;">
+      <h2 style="text-align: center;">📋 All Registrations</h2>
+      <div id="regList" style="max-height: 400px; overflow-y: auto; margin: 20px 0;"></div>
+      <button class="modal__close" style="width: 100%; text-align: center;">Close</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
