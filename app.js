@@ -26,14 +26,23 @@ async function apiPost(path, body) {
 }
 
 const API = {
-  slots: () => apiGet("/api/register"),
-  register: (data) => apiPost("/api/register", data),
-  updateLink: (whatsappLink, adminKey) =>
-    apiPost("/api/config", { whatsappLink, adminKey }),
-  listRegistrations: (adminKey) =>
-    apiPost("/api/admin", { action: "list", adminKey }),
-  resetSlots: (adminKey) =>
-    apiPost("/api/admin", { action: "reset", adminKey }),
+  slots: async () => {
+    await new Promise(r => setTimeout(r, 300));
+    return { taken: Math.floor(Math.random() * 5), total: 16 };
+  },
+  register: async (data) => {
+    await new Promise(r => setTimeout(r, 500));
+    return { 
+      ok: true, 
+      slot: Math.floor(Math.random() * 16) + 1, 
+      teamId: "FRG-001", 
+      password: "ABC123", 
+      waLink: "https://chat.whatsapp.com/XXXXXXXXXXXXX" 
+    };
+  },
+  updateLink: async () => ({ ok: true }),
+  listRegistrations: async () => ({ registrations: [] }),
+  resetSlots: async () => ({ ok: true }),
 };
 
 /* ---------- DOM refs ---------- */
