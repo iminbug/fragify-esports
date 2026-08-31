@@ -230,6 +230,23 @@ body {
 .room__note { color: var(--muted); font-size: 0.82rem; margin-top: 14px; text-align: center; }
 .room-form__clear { width: 100%; margin-top: 12px; }
 
+/* Locked state — shown to anyone who hasn't proved they registered */
+.room__gate[hidden], #roomUnlocked[hidden], .room__timer[hidden] { display: none; }
+.room__gate-text { color: var(--muted); font-size: 0.92rem; margin-bottom: 18px; }
+.room__gate-fields { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 14px; }
+.room__gate-btn { width: 100%; margin-top: 4px; }
+.room__team {
+  text-align: center; font-weight: 700; color: var(--whatsapp);
+  margin-bottom: 14px; font-size: 0.95rem;
+}
+.room__team:empty { display: none; }
+.room__lock {
+  display: block; margin: 12px auto 0; background: none; border: none;
+  color: var(--muted); font-family: inherit; font-size: 0.85rem;
+  cursor: pointer; text-decoration: underline;
+}
+.room__lock:hover { color: var(--accent); }
+
 /* ---------- Match details ---------- */
 .details {
   max-width: var(--maxw); margin: 50px auto 10px; padding: 0 24px;
@@ -486,6 +503,7 @@ body {
   .socials { grid-template-columns: 1fr; }
   .detail-grid { grid-template-columns: 1fr; }
   .room__creds { grid-template-columns: 1fr; }
+  .room__gate-fields { grid-template-columns: 1fr; }
   .prizes__row { grid-template-columns: 1fr; }
   .details-form__grid { grid-template-columns: 1fr; }
   .nav { padding: 16px; }

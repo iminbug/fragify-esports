@@ -101,24 +101,52 @@
       </div>
     </section>
 
-    <!-- ROOM CREDENTIALS (admin-posted, self-destructs after 10 minutes) -->
+    <!-- ROOM CREDENTIALS (admin-posted, unlocked with Team ID + password, 10-min life) -->
     <section class="room" id="roomBanner" hidden>
       <div class="room__card">
         <div class="room__head">
           <span class="room__badge"><span class="dot"></span> Room is Open</span>
-          <span class="room__timer" id="roomTimer">10:00</span>
+          <span class="room__timer" id="roomTimer" hidden>10:00</span>
         </div>
-        <div class="room__creds">
-          <div class="room__row">
-            <span class="room__label">Room ID</span>
-            <span class="room__value" id="roomId">—</span>
+
+        <!-- Locked view: everyone sees this until they prove they registered -->
+        <form class="room__gate" id="roomGate">
+          <p class="room__gate-text">
+            🔒 Room details sirf registered teams ke liye. Registration ke time jo
+            Team ID aur password mila tha wo daalo.
+          </p>
+          <div class="room__gate-fields">
+            <div class="field">
+              <label for="unlockId">Team ID</label>
+              <input type="text" id="unlockId" placeholder="FRG-006" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="unlockPass">Password</label>
+              <input type="text" id="unlockPass" placeholder="6-character password" autocomplete="off" />
+            </div>
           </div>
-          <div class="room__row">
-            <span class="room__label">Password</span>
-            <span class="room__value" id="roomPass">—</span>
+          <p class="form__alert" id="unlockAlert" role="alert" hidden></p>
+          <button type="submit" class="btn btn--primary room__gate-btn" id="unlockBtn">
+            Unlock Room Details
+          </button>
+        </form>
+
+        <!-- Unlocked view -->
+        <div id="roomUnlocked" hidden>
+          <p class="room__team" id="roomTeam"></p>
+          <div class="room__creds">
+            <div class="room__row">
+              <span class="room__label">Room ID</span>
+              <span class="room__value" id="roomId">—</span>
+            </div>
+            <div class="room__row">
+              <span class="room__label">Password</span>
+              <span class="room__value" id="roomPass">—</span>
+            </div>
           </div>
+          <p class="room__note">⚡ Screenshot le lo — ye details timer khatam hote hi apne aap hat jayengi.</p>
+          <button type="button" class="room__lock" id="roomLockBtn">Lock again</button>
         </div>
-        <p class="room__note">⚡ Screenshot le lo — ye details timer khatam hote hi apne aap hat jayengi.</p>
       </div>
     </section>
 

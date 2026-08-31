@@ -55,17 +55,12 @@ async function isRegistrationOpen() {
   return stored === null || stored === undefined ? true : Boolean(stored);
 }
 
-/* Live room credentials, if an admin has posted any. Redis expires the key by itself;
-   the countdown is sent as seconds-remaining so a wrong clock on the phone can't keep
-   the details on screen past their window. */
-async function getRoom() {
+/* Whether an admin has a room posted right now. Deliberately just a boolean — the
+   credentials themselves are behind /api/room, which checks the team's Team ID and
+   password first. This endpoint is public, so it must not leak them. */
+async function isRoomLive() {
   const room = await kv.get("config:room");
-  if (!room || !room.id) return null;
-
-  const secondsLeft = Math.ceil((room.expiresAt - Date.now()) / 1000);
-  if (secondsLeft <= 0) return null;
-
-  return { id: room.id, password: room.password, secondsLeft };
+  return Boolean(room && room.id && room.expiresAt > Date.now());
 }
 
 export default async function handler(req, res) {
@@ -82,7 +77,7 @@ export default async function handler(req, res) {
         taken,
         total: TOTAL_SLOTS,
         open: await isRegistrationOpen(),
-        room: await getRoom(),
+        roomLive: await isRoomLive(),
       });
     } catch (err) {
       return res.status(500).json({ error: err.message });
