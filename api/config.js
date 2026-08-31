@@ -53,6 +53,38 @@ function cleanTournament(raw) {
   return { tournament };
 }
 
+/* Room credentials are deliberately short-lived: Redis drops the key on its own after
+   ROOM_TTL_SECONDS, so a forgotten room ID can't sit on a public page all night. */
+const ROOM_TTL_SECONDS = 10 * 60;
+const MAX_ROOM_FIELD_LEN = 40;
+
+async function saveRoom(raw) {
+  // An explicit null means "take it down now".
+  if (raw === null) {
+    await kv.del("config:room");
+    return {};
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return { error: "Room details must be an object" };
+  }
+
+  const id = String(raw.id ?? "").trim();
+  const password = String(raw.password ?? "").trim();
+  if (!id || !password) {
+    return { error: "Room ID and password are both required" };
+  }
+  if (id.length > MAX_ROOM_FIELD_LEN || password.length > MAX_ROOM_FIELD_LEN) {
+    return { error: `Room ID and password must be under ${MAX_ROOM_FIELD_LEN} characters` };
+  }
+
+  await kv.set(
+    "config:room",
+    { id, password, expiresAt: Date.now() + ROOM_TTL_SECONDS * 1000 },
+    { ex: ROOM_TTL_SECONDS }
+  );
+  return {};
+}
+
 /* Stored links must be absolute — a scheme-less value would be treated as a relative
    URL by the browser and send the team to a page on this site instead. */
 function normalizeLink(raw) {
@@ -88,7 +120,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { whatsappLink, registrationOpen, tournament, adminKey } = req.body || {};
+    const { whatsappLink, registrationOpen, tournament, room, adminKey } = req.body || {};
 
     if (!process.env.ADMIN_KEY) {
       return res.status(500).json({ error: "Admin key is not configured on the server" });
@@ -113,6 +145,10 @@ export default async function handler(req, res) {
         const { tournament: cleaned, error } = cleanTournament(tournament);
         if (error) return res.status(400).json({ error });
         await kv.set("config:tournament", cleaned || {});
+      }
+      if (room !== undefined) {
+        const { error } = await saveRoom(room);
+        if (error) return res.status(400).json({ error });
       }
       return res.status(200).json({
         ok: true,

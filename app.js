@@ -35,6 +35,8 @@ const API = {
     apiPost("/api/config", { registrationOpen, adminKey }),
   updateTournament: (tournament, adminKey) =>
     apiPost("/api/config", { tournament, adminKey }),
+  postRoom: (room, adminKey) =>
+    apiPost("/api/config", { room, adminKey }),
   listRegistrations: (adminKey) =>
     apiPost("/api/admin", { action: "list", adminKey }),
   resetSlots: (adminKey) =>
@@ -59,9 +61,9 @@ const modal = el("successModal");
 let registrationOpen = true;
 
 async function renderSlots() {
-  let taken, total, open;
+  let taken, total, open, room;
   try {
-    ({ taken, total, open } = await API.slots());
+    ({ taken, total, open, room } = await API.slots());
   } catch (err) {
     console.error("Slot fetch failed:", err);
     slotsLeftEl.textContent = "—";
@@ -70,6 +72,7 @@ async function renderSlots() {
 
   // Older deploys don't send `open` — absent means the toggle isn't in play.
   registrationOpen = open !== false;
+  applyRoom(room);
 
   const left = Math.max(0, total - taken);
   const pct = Math.min(100, (taken / total) * 100);
@@ -113,6 +116,46 @@ function updateAdminToggleLabel() {
     ? "🟢 Registration: LIVE — tap to close"
     : "🔴 Registration: CLOSED — tap to open";
 }
+
+/* ---------- Live room credentials ---------- */
+/* The server sends seconds-remaining rather than an expiry timestamp, so a phone with
+   a wrong clock can't keep the room ID on screen after it has expired. We count down
+   locally between the 10-second polls and re-sync on every one of them. */
+let roomSecondsLeft = 0;
+
+function paintRoomTimer() {
+  const mins = Math.floor(roomSecondsLeft / 60);
+  const secs = roomSecondsLeft % 60;
+  const timer = el("roomTimer");
+  timer.textContent = `${mins}:${String(secs).padStart(2, "0")}`;
+  timer.classList.toggle("is-ending", roomSecondsLeft <= 60);
+}
+
+function applyRoom(room) {
+  const banner = el("roomBanner");
+
+  if (!room || !room.id || !(room.secondsLeft > 0)) {
+    roomSecondsLeft = 0;
+    banner.hidden = true;
+    return;
+  }
+
+  roomSecondsLeft = room.secondsLeft;
+  el("roomId").textContent = room.id;
+  el("roomPass").textContent = room.password;
+  paintRoomTimer();
+  banner.hidden = false;
+}
+
+setInterval(() => {
+  if (roomSecondsLeft <= 0) return;
+  roomSecondsLeft--;
+  if (roomSecondsLeft <= 0) {
+    el("roomBanner").hidden = true;
+    return;
+  }
+  paintRoomTimer();
+}, 1000);
 
 /* ---------- Match details ---------- */
 /* Field order here drives both the public tiles and the admin form. */
@@ -406,6 +449,69 @@ el("adminToggleBtn").addEventListener("click", async () => {
     updateAdminToggleLabel();
   } finally {
     btn.disabled = false;
+  }
+});
+
+/* ---------- Admin: room ID & password ---------- */
+const roomModal = el("roomModal");
+const roomForm = el("roomForm");
+
+function setRoomAlert(msg) {
+  const alert = el("roomAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
+
+function closeRoomModal() {
+  roomModal.hidden = true;
+}
+
+el("adminRoomBtn").addEventListener("click", () => {
+  setRoomAlert("");
+  // Always start blank — a room ID is posted fresh each match, never edited.
+  el("rId").value = "";
+  el("rPass").value = "";
+  roomModal.hidden = false;
+});
+
+roomModal.querySelector(".modal__close").addEventListener("click", closeRoomModal);
+roomModal.querySelector(".modal__backdrop").addEventListener("click", closeRoomModal);
+
+roomForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setRoomAlert("");
+
+  const saveBtn = el("roomSaveBtn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Posting…";
+
+  try {
+    await API.postRoom(
+      { id: el("rId").value.trim(), password: el("rPass").value.trim() },
+      adminKey
+    );
+    await renderSlots();
+    closeRoomModal();
+    alert("✅ Room details live for 10 minutes");
+  } catch (err) {
+    setRoomAlert(err.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Post for 10 Minutes";
+  }
+});
+
+el("roomClearBtn").addEventListener("click", async () => {
+  if (!confirm("Remove the room details from the website right now?")) return;
+
+  try {
+    // An explicit null tells the server to drop the key instead of writing one.
+    await API.postRoom(null, adminKey);
+    await renderSlots();
+    closeRoomModal();
+    alert("✅ Room details removed");
+  } catch (err) {
+    setRoomAlert(err.message);
   }
 });
 

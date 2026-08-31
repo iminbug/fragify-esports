@@ -101,6 +101,27 @@
       </div>
     </section>
 
+    <!-- ROOM CREDENTIALS (admin-posted, self-destructs after 10 minutes) -->
+    <section class="room" id="roomBanner" hidden>
+      <div class="room__card">
+        <div class="room__head">
+          <span class="room__badge"><span class="dot"></span> Room is Open</span>
+          <span class="room__timer" id="roomTimer">10:00</span>
+        </div>
+        <div class="room__creds">
+          <div class="room__row">
+            <span class="room__label">Room ID</span>
+            <span class="room__value" id="roomId">—</span>
+          </div>
+          <div class="room__row">
+            <span class="room__label">Password</span>
+            <span class="room__value" id="roomPass">—</span>
+          </div>
+        </div>
+        <p class="room__note">⚡ Screenshot le lo — ye details timer khatam hote hi apne aap hat jayengi.</p>
+      </div>
+    </section>
+
     <!-- MATCH DETAILS (filled from the admin panel; hidden until something is set) -->
     <section class="details" id="detailsSection" hidden>
       <div class="details__head">
@@ -207,18 +228,18 @@
           </span>
         </a>
 
-        <a class="social social--ig" href="https://www.instagram.com/fragifyesports" target="_blank" rel="noopener">
+        <a class="social social--ig" href="https://www.instagram.com/esportsfragify" target="_blank" rel="noopener">
           <span class="social__icon"><svg aria-hidden="true"><use href="#i-ig" /></svg></span>
           <span>
             <span class="social__label">Instagram</span>
-            <span class="social__value">@fragifyesports</span>
+            <span class="social__value">@esportsfragify</span>
           </span>
         </a>
 
-        <a class="social social--call" href="tel:+919217191222">
-          <span class="social__icon"><svg aria-hidden="true"><use href="#i-call" /></svg></span>
+        <a class="social social--call" href="https://wa.me/919217191222" target="_blank" rel="noopener">
+          <span class="social__icon"><svg aria-hidden="true"><use href="#i-wa" /></svg></span>
           <span>
-            <span class="social__label">Call / WhatsApp</span>
+            <span class="social__label">WhatsApp</span>
             <span class="social__value">+91 92171 91222</span>
           </span>
         </a>
@@ -258,7 +279,7 @@
       <a href="https://www.youtube.com/@FragifyEsports" target="_blank" rel="noopener">
         <svg aria-hidden="true"><use href="#i-yt" /></svg> YouTube
       </a>
-      <a href="https://www.instagram.com/fragifyesports" target="_blank" rel="noopener">
+      <a href="https://www.instagram.com/esportsfragify" target="_blank" rel="noopener">
         <svg aria-hidden="true"><use href="#i-ig" /></svg> Instagram
       </a>
       <a href="https://wa.me/919217191222" target="_blank" rel="noopener">
@@ -279,12 +300,46 @@
       <h2>🔐 Admin Panel</h2>
       <div class="admin-menu">
         <button class="admin-btn" id="adminToggleBtn">⏳ Registration: …</button>
+        <button class="admin-btn" id="adminRoomBtn">🎮 Post Room ID &amp; Pass</button>
         <button class="admin-btn" id="adminDetailsBtn">🏆 Edit Match Details</button>
         <button class="admin-btn" id="adminViewBtn">📋 View All Registrations</button>
         <button class="admin-btn" id="adminLinkBtn">🔗 Update WhatsApp Link</button>
         <button class="admin-btn admin-btn--danger" id="adminResetBtn">🗑️ Reset All Slots</button>
       </div>
       <button class="admin-close" id="adminCloseBtn">Close</button>
+    </div>
+  </div>
+
+  <!-- ROOM ID EDITOR (admin) -->
+  <div class="modal" id="roomModal" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__card modal__card--wide">
+      <h2>🎮 Post Room ID &amp; Pass</h2>
+      <p class="modal__sub">Website pe 10 minute dikhega, phir apne aap gayab.</p>
+
+      <form id="roomForm" class="details-form">
+        <div class="details-form__grid">
+          <div class="field">
+            <label for="rId">Room ID</label>
+            <input type="text" id="rId" name="id" placeholder="e.g. 84213705" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="rPass">Password</label>
+            <input type="text" id="rPass" name="password" placeholder="e.g. frag99" autocomplete="off" />
+          </div>
+        </div>
+
+        <p class="form__alert" id="roomAlert" role="alert" hidden></p>
+
+        <button type="submit" class="btn btn--primary details-form__submit" id="roomSaveBtn">
+          Post for 10 Minutes
+        </button>
+      </form>
+
+      <button class="admin-btn admin-btn--danger room-form__clear" id="roomClearBtn">
+        Take it down now
+      </button>
+      <button class="modal__close">Cancel</button>
     </div>
   </div>
 
