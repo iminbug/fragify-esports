@@ -3,6 +3,11 @@ import { kv } from "@vercel/kv";
 const TOTAL_SLOTS = 16;
 const MAX_MEMBERS = 4;
 
+/* Slot numbers run from FIRST_SLOT upwards — 1..FIRST_SLOT-1 are held back and
+   never handed out. The cap is still TOTAL_SLOTS registrations, so with a first
+   slot of 6 the lobby fills #06 through #21. */
+const FIRST_SLOT = 6;
+
 function genPassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let p = "";
@@ -10,10 +15,12 @@ function genPassword() {
   return p;
 }
 
+/* Team names are compared loosely so "Team  Phantom" can't sneak past "team phantom". */
 function normalizeTeamName(name) {
   return String(name).trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+/* Optional squad IGNs — anything blank is dropped, so an empty list is valid. */
 function cleanMembers(raw) {
   if (raw == null) return { members: [] };
   if (!Array.isArray(raw)) return { error: "Squad members must be a list" };
@@ -41,6 +48,13 @@ async function countTaken() {
   return Array.isArray(regList) ? regList.length : 0;
 }
 
+/* Admins can close registration early from the panel. The key is absent until the
+   toggle is first used, so "not set" means open. */
+async function isRegistrationOpen() {
+  const stored = await kv.get("config:registration_open");
+  return stored === null || stored === undefined ? true : Boolean(stored);
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -51,7 +65,11 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     try {
       const taken = await countTaken();
-      return res.status(200).json({ taken, total: TOTAL_SLOTS });
+      return res.status(200).json({
+        taken,
+        total: TOTAL_SLOTS,
+        open: await isRegistrationOpen(),
+      });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -60,6 +78,7 @@ export default async function handler(req, res) {
   if (req.method === "POST") {
     const { teamName, leaderName, phone, members: rawMembers } = req.body || {};
 
+    // Server-side validation (frontend validation is not enough)
     if (!teamName || teamName.trim().length < 2) {
       return res.status(400).json({ error: "Team name is required" });
     }
@@ -76,11 +95,19 @@ export default async function handler(req, res) {
     }
 
     try {
+      // An admin can shut the door before the slots run out.
+      if (!(await isRegistrationOpen())) {
+        return res.status(403).json({ error: "Registration is currently closed" });
+      }
+
+      // Duplicate phone check — one number, one registration.
       const dupPhone = await kv.get(`registrations:phone:${digits}`);
       if (dupPhone) {
         return res.status(409).json({ error: "This number is already registered" });
       }
 
+      // Duplicate team name check. The list is capped at TOTAL_SLOTS entries, so
+      // comparing in JS is cheap.
       const regList = (await kv.get("registrations:list")) || [];
       const normalizedTeamName = normalizeTeamName(teamName);
       if (regList.some((r) => normalizeTeamName(r.team_name) === normalizedTeamName)) {
@@ -91,7 +118,7 @@ export default async function handler(req, res) {
         return res.status(409).json({ error: "Registration is full" });
       }
 
-      const slot = regList.length + 1;
+      const slot = FIRST_SLOT + regList.length;
       const teamId = "FRG-" + String(slot).padStart(3, "0");
       const password = genPassword();
 

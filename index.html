@@ -163,11 +163,11 @@
         <p class="form__note">By registering you agree to the tournament rules &amp; fair-play policy.</p>
       </form>
 
-      <!-- CLOSED STATE (hidden until full) -->
+      <!-- CLOSED STATE (hidden until full, or closed early by an admin) -->
       <div class="closed" id="closedState" hidden>
         <div class="closed__icon">🔒</div>
-        <h2>Registration Closed</h2>
-        <p>All 16 slots are filled. Follow us for the next season drop.</p>
+        <h2 id="closedTitle">Registration Closed</h2>
+        <p id="closedMsg">All 16 slots are filled. Follow us for the next season drop.</p>
       </div>
     </section>
 
@@ -258,6 +258,7 @@
     <div class="admin-card">
       <h2>🔐 Admin Panel</h2>
       <div class="admin-menu">
+        <button class="admin-btn" id="adminToggleBtn">⏳ Registration: …</button>
         <button class="admin-btn" id="adminViewBtn">📋 View All Registrations</button>
         <button class="admin-btn" id="adminLinkBtn">🔗 Update WhatsApp Link</button>
         <button class="admin-btn admin-btn--danger" id="adminResetBtn">🗑️ Reset All Slots</button>

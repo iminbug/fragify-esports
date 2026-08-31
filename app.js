@@ -30,6 +30,8 @@ const API = {
   register: (data) => apiPost("/api/register", data),
   updateLink: (whatsappLink, adminKey) =>
     apiPost("/api/config", { whatsappLink, adminKey }),
+  setRegistrationOpen: (registrationOpen, adminKey) =>
+    apiPost("/api/config", { registrationOpen, adminKey }),
   listRegistrations: (adminKey) =>
     apiPost("/api/admin", { action: "list", adminKey }),
   resetSlots: (adminKey) =>
@@ -50,15 +52,21 @@ const heroCta = el("heroCta");
 const modal = el("successModal");
 
 /* ---------- Render slots ---------- */
+/* Mirrors the admin toggle so the panel can label its button without a second fetch. */
+let registrationOpen = true;
+
 async function renderSlots() {
-  let taken, total;
+  let taken, total, open;
   try {
-    ({ taken, total } = await API.slots());
+    ({ taken, total, open } = await API.slots());
   } catch (err) {
     console.error("Slot fetch failed:", err);
     slotsLeftEl.textContent = "—";
     return;
   }
+
+  // Older deploys don't send `open` — absent means the toggle isn't in play.
+  registrationOpen = open !== false;
 
   const left = Math.max(0, total - taken);
   const pct = Math.min(100, (taken / total) * 100);
@@ -69,14 +77,21 @@ async function renderSlots() {
   slotsLeftEl.textContent = left === 0 ? "FULL" : left + " left";
   slotsLeftEl.classList.toggle("is-low", left > 0 && left <= CONFIG.lowSlotThreshold);
 
+  // Two ways to be shut: every slot gone, or an admin closed it early.
   const isFull = left === 0;
-  form.hidden = isFull;
-  closedState.hidden = !isFull;
-  navStatus.classList.toggle("is-closed", isFull);
-  navStatusText.textContent = isFull ? "Registration Closed" : "Registration Live";
+  const isClosed = isFull || !registrationOpen;
 
-  if (isFull) {
-    heroCta.textContent = "Slots Full";
+  form.hidden = isClosed;
+  closedState.hidden = !isClosed;
+  navStatus.classList.toggle("is-closed", isClosed);
+  navStatusText.textContent = isClosed ? "Registration Closed" : "Registration Live";
+
+  if (isClosed) {
+    el("closedTitle").textContent = isFull ? "Registration Closed" : "Registration Paused";
+    el("closedMsg").textContent = isFull
+      ? `All ${total} slots are filled. Follow us for the next season drop.`
+      : "Registration is closed right now. Follow us — we'll announce when it reopens.";
+    heroCta.textContent = isFull ? "Slots Full" : "Registration Closed";
     heroCta.style.pointerEvents = "none";
     heroCta.style.opacity = "0.5";
   } else {
@@ -84,6 +99,16 @@ async function renderSlots() {
     heroCta.style.pointerEvents = "";
     heroCta.style.opacity = "";
   }
+
+  updateAdminToggleLabel();
+}
+
+function updateAdminToggleLabel() {
+  const btn = el("adminToggleBtn");
+  if (!btn) return;
+  btn.textContent = registrationOpen
+    ? "🟢 Registration: LIVE — tap to close"
+    : "🔴 Registration: CLOSED — tap to open";
 }
 
 /* ---------- Validation ---------- */
@@ -211,6 +236,7 @@ if (new URLSearchParams(window.location.search).get("admin")) {
       .then(() => {
         adminKey = key;
         el("adminPanel").hidden = false;
+        updateAdminToggleLabel();
       })
       .catch((err) => alert("❌ " + err.message));
   }
@@ -257,6 +283,28 @@ el("regModal").querySelector(".modal__close").addEventListener("click", () => {
 });
 el("regModal").querySelector(".modal__backdrop").addEventListener("click", () => {
   el("regModal").hidden = true;
+});
+
+el("adminToggleBtn").addEventListener("click", async () => {
+  const next = !registrationOpen;
+  const btn = el("adminToggleBtn");
+
+  if (!next && !confirm("Close registration now? The form will disappear for everyone.")) {
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "⏳ Saving…";
+  try {
+    await API.setRegistrationOpen(next, adminKey);
+    await renderSlots();
+    alert(next ? "✅ Registration is LIVE" : "🔒 Registration is CLOSED");
+  } catch (err) {
+    alert("❌ " + err.message);
+    updateAdminToggleLabel();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 el("adminLinkBtn").addEventListener("click", async () => {

@@ -12,6 +12,11 @@ export default async function handler(req, res) {
 
   const { action, adminKey } = req.body || {};
 
+  // Distinguish "server has no key configured" from "wrong key" — otherwise a
+  // missing env var looks identical to a typo and is painful to diagnose.
+  if (!process.env.ADMIN_KEY) {
+    return res.status(500).json({ error: "Admin key is not configured on the server" });
+  }
   if (!adminKey || adminKey !== process.env.ADMIN_KEY) {
     return res.status(401).json({ error: "Unauthorized" });
   }
