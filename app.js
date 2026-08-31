@@ -29,6 +29,7 @@ const API = {
   slots: () => apiGet("/api/register"),
   config: () => apiGet("/api/config"),
   register: (data) => apiPost("/api/register", data),
+  room: (teamId, password) => apiPost("/api/room", { teamId, password }),
   updateLink: (whatsappLink, adminKey) =>
     apiPost("/api/config", { whatsappLink, adminKey }),
   setRegistrationOpen: (registrationOpen, adminKey) =>
@@ -61,9 +62,9 @@ const modal = el("successModal");
 let registrationOpen = true;
 
 async function renderSlots() {
-  let taken, total, open, room;
+  let taken, total, open, roomLive;
   try {
-    ({ taken, total, open, room } = await API.slots());
+    ({ taken, total, open, roomLive } = await API.slots());
   } catch (err) {
     console.error("Slot fetch failed:", err);
     slotsLeftEl.textContent = "—";
@@ -72,7 +73,7 @@ async function renderSlots() {
 
   // Older deploys don't send `open` — absent means the toggle isn't in play.
   registrationOpen = open !== false;
-  applyRoom(room);
+  applyRoom(Boolean(roomLive));
 
   const left = Math.max(0, total - taken);
   const pct = Math.min(100, (taken / total) * 100);
@@ -118,10 +119,44 @@ function updateAdminToggleLabel() {
 }
 
 /* ---------- Live room credentials ---------- */
-/* The server sends seconds-remaining rather than an expiry timestamp, so a phone with
-   a wrong clock can't keep the room ID on screen after it has expired. We count down
+/* The public slots endpoint only says whether a room is live. The credentials come from
+   /api/room, which wants the Team ID and password issued at registration — so a random
+   visitor sees a locked card and nothing else.
+
+   The server sends seconds-remaining rather than an expiry timestamp, so a phone with a
+   wrong clock can't keep the room ID on screen after it has expired. We count down
    locally between the 10-second polls and re-sync on every one of them. */
 let roomSecondsLeft = 0;
+
+/* Kept in sessionStorage, not localStorage: a shared or borrowed phone shouldn't stay
+   unlocked once the tab is closed. */
+const AUTH_KEY = "fragify:auth";
+
+function savedAuth() {
+  try {
+    const raw = sessionStorage.getItem(AUTH_KEY);
+    const auth = raw ? JSON.parse(raw) : null;
+    return auth && auth.teamId && auth.password ? auth : null;
+  } catch {
+    return null;
+  }
+}
+function saveAuth(teamId, password) {
+  try {
+    sessionStorage.setItem(AUTH_KEY, JSON.stringify({ teamId, password }));
+  } catch {
+    /* private mode — the team just re-enters the details, no harm done */
+  }
+}
+function clearAuth() {
+  try { sessionStorage.removeItem(AUTH_KEY); } catch { /* nothing to clear */ }
+}
+
+function setUnlockAlert(msg) {
+  const alert = el("unlockAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
 
 function paintRoomTimer() {
   const mins = Math.floor(roomSecondsLeft / 60);
@@ -131,20 +166,49 @@ function paintRoomTimer() {
   timer.classList.toggle("is-ending", roomSecondsLeft <= 60);
 }
 
-function applyRoom(room) {
+function showRoomGate(message) {
+  roomSecondsLeft = 0;
+  setUnlockAlert(message || "");
+  el("roomTimer").hidden = true;
+  el("roomUnlocked").hidden = true;
+  el("roomGate").hidden = false;
+}
+
+function showRoomCreds(room, team) {
+  roomSecondsLeft = room.secondsLeft;
+  el("roomId").textContent = room.id;
+  el("roomPass").textContent = room.password;
+  el("roomTeam").textContent = team ? `Welcome, ${team}` : "";
+  paintRoomTimer();
+  el("roomTimer").hidden = false;
+  el("roomGate").hidden = true;
+  el("roomUnlocked").hidden = false;
+}
+
+async function applyRoom(roomLive) {
   const banner = el("roomBanner");
 
-  if (!room || !room.id || !(room.secondsLeft > 0)) {
+  if (!roomLive) {
     roomSecondsLeft = 0;
     banner.hidden = true;
     return;
   }
-
-  roomSecondsLeft = room.secondsLeft;
-  el("roomId").textContent = room.id;
-  el("roomPass").textContent = room.password;
-  paintRoomTimer();
   banner.hidden = false;
+
+  // Already unlocked in this tab — refresh the countdown from the server.
+  const auth = savedAuth();
+  if (!auth) return showRoomGate();
+
+  try {
+    const { room, team } = await API.room(auth.teamId, auth.password);
+    if (room) showRoomCreds(room, team);
+    else showRoomGate();
+  } catch (err) {
+    // Slots were reset, so these credentials will never work again — drop them
+    // rather than retrying a doomed call every 10 seconds.
+    clearAuth();
+    showRoomGate(err.message);
+  }
 }
 
 setInterval(() => {
@@ -156,6 +220,41 @@ setInterval(() => {
   }
   paintRoomTimer();
 }, 1000);
+
+el("roomGate").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setUnlockAlert("");
+
+  // Both values are issued uppercase, so accept whatever case the team types.
+  const teamId = el("unlockId").value.trim().toUpperCase();
+  const password = el("unlockPass").value.trim().toUpperCase();
+  if (!teamId || !password) {
+    return setUnlockAlert("Team ID aur password dono chahiye.");
+  }
+
+  const btn = el("unlockBtn");
+  btn.disabled = true;
+  btn.textContent = "Checking…";
+
+  try {
+    const { room, team } = await API.room(teamId, password);
+    saveAuth(teamId, password);
+    if (room) showRoomCreds(room, team);
+    else setUnlockAlert("Room abhi post nahi hua. Thodi der me try karo.");
+  } catch (err) {
+    setUnlockAlert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Unlock Room Details";
+  }
+});
+
+el("roomLockBtn").addEventListener("click", () => {
+  clearAuth();
+  el("unlockId").value = "";
+  el("unlockPass").value = "";
+  showRoomGate();
+});
 
 /* ---------- Match details ---------- */
 /* Field order here drives both the public tiles and the admin form. */
@@ -342,6 +441,10 @@ function showSuccess(teamName, res) {
   el("modalTeam").textContent = teamName;
   el("credId").textContent = res.teamId;
   el("credPass").textContent = res.password;
+
+  // The team just proved who they are — remember it so the room card unlocks
+  // itself for them without a second login.
+  saveAuth(res.teamId, res.password);
 
   const waBtn = el("waLink");
   const link = normalizeWaLink(res.waLink);
