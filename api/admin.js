@@ -1,9 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+import { kv } from "@vercel/kv";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -21,25 +16,24 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  if (action === "list") {
-    const { data, error } = await supabase
-      .from("registrations")
-      .select("slot_number, team_name, leader_name, phone, members, team_id, password")
-      .order("slot_number", { ascending: true });
+  try {
+    if (action === "list") {
+      const regList = (await kv.get("registrations:list")) || [];
+      return res.status(200).json({ registrations: regList });
+    }
 
-    if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json({ registrations: data });
+    if (action === "reset") {
+      const regList = (await kv.get("registrations:list")) || [];
+      for (const reg of regList) {
+        await kv.del(`registrations:phone:${reg.phone}`);
+        await kv.del(`registrations:${reg.slot_number}`);
+      }
+      await kv.del("registrations:list");
+      return res.status(200).json({ ok: true });
+    }
+
+    return res.status(400).json({ error: "Unknown action" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
-
-  if (action === "reset") {
-    const { error } = await supabase
-      .from("registrations")
-      .delete()
-      .gte("slot_number", 0);
-
-    if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json({ ok: true });
-  }
-
-  return res.status(400).json({ error: "Unknown action" });
 }

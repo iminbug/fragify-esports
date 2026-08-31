@@ -1,9 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+import { kv } from "@vercel/kv";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -13,14 +8,14 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   if (req.method === "GET") {
-    const { data, error } = await supabase
-      .from("config")
-      .select("whatsapp_link")
-      .eq("id", 1)
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json({ whatsappLink: data.whatsapp_link });
+    try {
+      const whatsappLink = await kv.get("config:whatsapp_link");
+      return res.status(200).json({
+        whatsappLink: whatsappLink || "https://chat.whatsapp.com/",
+      });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   if (req.method === "POST") {
@@ -30,13 +25,12 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { error } = await supabase
-      .from("config")
-      .update({ whatsapp_link: whatsappLink, updated_at: new Date() })
-      .eq("id", 1);
-
-    if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json({ ok: true });
+    try {
+      await kv.set("config:whatsapp_link", whatsappLink);
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   res.status(405).json({ error: "Method not allowed" });

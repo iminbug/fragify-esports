@@ -1,9 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+import { kv } from "@vercel/kv";
 
 const TOTAL_SLOTS = 16;
 const MAX_MEMBERS = 4;
@@ -15,12 +10,10 @@ function genPassword() {
   return p;
 }
 
-/* Team names are compared loosely so "Team  Phantom" can't sneak past "team phantom". */
 function normalizeTeamName(name) {
   return String(name).trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-/* Optional squad IGNs — anything blank is dropped, so an empty list is valid. */
 function cleanMembers(raw) {
   if (raw == null) return { members: [] };
   if (!Array.isArray(raw)) return { error: "Squad members must be a list" };
@@ -44,11 +37,8 @@ function cleanMembers(raw) {
 }
 
 async function countTaken() {
-  const { count, error } = await supabase
-    .from("registrations")
-    .select("*", { count: "exact", head: true });
-  if (error) throw new Error(error.message);
-  return count || 0;
+  const regList = await kv.get("registrations:list");
+  return Array.isArray(regList) ? regList.length : 0;
 }
 
 export default async function handler(req, res) {
@@ -70,7 +60,6 @@ export default async function handler(req, res) {
   if (req.method === "POST") {
     const { teamName, leaderName, phone, members: rawMembers } = req.body || {};
 
-    // Server-side validation (frontend validation is not enough)
     if (!teamName || teamName.trim().length < 2) {
       return res.status(400).json({ error: "Team name is required" });
     }
@@ -87,108 +76,49 @@ export default async function handler(req, res) {
     }
 
     try {
-      // Duplicate phone check — one number, one registration.
-      const { data: dupPhone, error: phoneErr } = await supabase
-        .from("registrations")
-        .select("slot_number")
-        .eq("phone", digits);
-
-      if (phoneErr) throw new Error(phoneErr.message);
-      if (dupPhone && dupPhone.length > 0) {
+      const dupPhone = await kv.get(`registrations:phone:${digits}`);
+      if (dupPhone) {
         return res.status(409).json({ error: "This number is already registered" });
       }
 
-      // Duplicate team name check. The table is capped at TOTAL_SLOTS rows, so
-      // comparing in JS is cheap and avoids ILIKE wildcard surprises in the name.
-      const { data: existingTeams, error: teamErr } = await supabase
-        .from("registrations")
-        .select("team_name");
-
-      if (teamErr) throw new Error(teamErr.message);
-      const wanted = normalizeTeamName(teamName);
-      if ((existingTeams || []).some((t) => normalizeTeamName(t.team_name) === wanted)) {
+      const regList = (await kv.get("registrations:list")) || [];
+      const normalizedTeamName = normalizeTeamName(teamName);
+      if (regList.some((r) => normalizeTeamName(r.team_name) === normalizedTeamName)) {
         return res.status(409).json({ error: "This team name is already registered" });
       }
 
-      // Assign the next free slot. slot_number has a UNIQUE constraint, so if two
-      // requests race for the same number one insert fails — retry with the next one.
-      let inserted = null;
-      let duplicateError = null;
-
-      for (let attempt = 0; attempt < TOTAL_SLOTS; attempt++) {
-        const { data: rows, error: maxErr } = await supabase
-          .from("registrations")
-          .select("slot_number")
-          .order("slot_number", { ascending: false })
-          .limit(1);
-
-        if (maxErr) throw new Error(maxErr.message);
-
-        const taken = await countTaken();
-        if (taken >= TOTAL_SLOTS) {
-          return res.status(409).json({ error: "Registration is full" });
-        }
-
-        const slot = (rows?.[0]?.slot_number || 0) + 1;
-        if (slot > TOTAL_SLOTS) {
-          return res.status(409).json({ error: "Registration is full" });
-        }
-
-        const teamId = "FRG-" + String(slot).padStart(3, "0");
-        const password = genPassword();
-
-        const { error: insertErr } = await supabase.from("registrations").insert({
-          team_name: teamName.trim(),
-          leader_name: leaderName.trim(),
-          phone: digits,
-          members: members,
-          slot_number: slot,
-          team_id: teamId,
-          password: password,
-        });
-
-        if (!insertErr) {
-          inserted = { slot, teamId, password };
-          break;
-        }
-
-        // 23505 = unique violation. It can mean a raced slot_number (retry) or a
-        // raced phone/team_name that slipped past the checks above (give up).
-        if (insertErr.code !== "23505") {
-          throw new Error(insertErr.message);
-        }
-
-        const detail = `${insertErr.message} ${insertErr.details || ""}`.toLowerCase();
-        if (detail.includes("phone")) {
-          duplicateError = "This number is already registered";
-          break;
-        }
-        if (detail.includes("team_name")) {
-          duplicateError = "This team name is already registered";
-          break;
-        }
-        // else: slot_number collision — loop and try the next slot
+      if (regList.length >= TOTAL_SLOTS) {
+        return res.status(409).json({ error: "Registration is full" });
       }
 
-      if (duplicateError) {
-        return res.status(409).json({ error: duplicateError });
-      }
-      if (!inserted) {
-        return res.status(409).json({ error: "Could not assign a slot, please retry" });
-      }
+      const slot = regList.length + 1;
+      const teamId = "FRG-" + String(slot).padStart(3, "0");
+      const password = genPassword();
 
-      const { data: config } = await supabase
-        .from("config")
-        .select("whatsapp_link")
-        .eq("id", 1)
-        .single();
+      const registration = {
+        slot_number: slot,
+        team_name: teamName.trim(),
+        leader_name: leaderName.trim(),
+        phone: digits,
+        members: members,
+        team_id: teamId,
+        password: password,
+        created_at: new Date().toISOString(),
+      };
+
+      regList.push(registration);
+      await kv.set("registrations:list", regList);
+      await kv.set(`registrations:phone:${digits}`, slot);
+      await kv.set(`registrations:${slot}`, registration);
+
+      const waLink = (await kv.get("config:whatsapp_link")) || "https://chat.whatsapp.com/";
 
       return res.status(200).json({
         ok: true,
-        slot: inserted.slot,
-        teamId: inserted.teamId,
-        password: inserted.password,
-        waLink: config?.whatsapp_link || "https://chat.whatsapp.com/",
+        slot: slot,
+        teamId: teamId,
+        password: password,
+        waLink: waLink,
       });
     } catch (err) {
       return res.status(500).json({ error: err.message });
