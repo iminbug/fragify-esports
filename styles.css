@@ -185,6 +185,81 @@ body {
 .card h3 { font-family: "Orbitron", sans-serif; font-size: 1rem; margin-bottom: 8px; }
 .card p { color: var(--muted); font-size: 0.95rem; }
 
+/* ---------- Match details ---------- */
+.details {
+  max-width: var(--maxw); margin: 50px auto 10px; padding: 0 24px;
+}
+.details[hidden] { display: none; }
+.details__head { text-align: center; margin-bottom: 26px; }
+.details__head h2 {
+  font-family: "Orbitron", sans-serif; font-size: clamp(1.3rem, 4vw, 1.8rem);
+}
+.details__head p { color: var(--muted); margin-top: 6px; }
+
+.detail-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+}
+.detail {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px 18px; transition: border-color .2s ease;
+}
+.detail:hover { border-color: var(--accent); }
+.detail__icon {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 11px;
+  display: grid; place-items: center; font-size: 1.2rem;
+  background: rgba(255,155,33,0.1); border: 1px solid var(--border);
+}
+.detail__label {
+  display: block; font-size: 0.72rem; color: var(--muted);
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.detail__value { display: block; font-weight: 700; font-size: 1rem; margin-top: 2px; }
+
+.prizes {
+  margin-top: 16px; background: var(--card);
+  border: 1px solid var(--accent); border-radius: var(--radius); padding: 22px 20px;
+}
+.prizes[hidden] { display: none; }
+.prizes__title {
+  font-family: "Orbitron", sans-serif; font-size: 0.95rem;
+  text-align: center; margin-bottom: 18px;
+}
+.prizes__row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.prize {
+  text-align: center; background: var(--bg-soft);
+  border: 1px solid var(--border); border-radius: 12px; padding: 16px 12px;
+}
+.prize__icon { font-size: 1.5rem; }
+.prize__label { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 6px; }
+.prize__value {
+  display: block; font-family: "Orbitron", sans-serif; font-weight: 800;
+  font-size: 1.15rem; color: var(--accent); margin-top: 4px;
+}
+
+.rules {
+  margin-top: 16px; background: rgba(255,77,61,0.06);
+  border: 1px dashed var(--danger); border-radius: var(--radius); padding: 20px 22px;
+}
+.rules[hidden] { display: none; }
+.rules__title { font-family: "Orbitron", sans-serif; font-size: 0.95rem; margin-bottom: 12px; }
+.rules__list { list-style: none; display: grid; gap: 10px; }
+.rules__list li {
+  position: relative; padding-left: 22px; color: var(--muted); font-size: 0.95rem;
+}
+.rules__list li::before {
+  content: "▸"; position: absolute; left: 4px; color: var(--danger); font-weight: 700;
+}
+
+/* ---------- Match details editor (admin) ---------- */
+.modal__card--wide { max-width: 560px; text-align: left; }
+.modal__card--wide h2 { text-align: center; }
+.modal__sub { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 6px; }
+.details-form { margin-top: 22px; }
+.details-form__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 14px; }
+.details-form__hint { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 6px; }
+.details-form__submit { width: 100%; margin-top: 8px; }
+
 /* ---------- Register ---------- */
 .register {
   max-width: 560px; margin: 60px auto; padding: 0 24px; scroll-margin-top: 20px;
@@ -364,6 +439,9 @@ body {
 @media (max-width: 760px) {
   .cards { grid-template-columns: 1fr; }
   .socials { grid-template-columns: 1fr; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .prizes__row { grid-template-columns: 1fr; }
+  .details-form__grid { grid-template-columns: 1fr; }
   .nav { padding: 16px; }
   .nav__brand { gap: 10px; }
   .nav__icon { width: 40px; height: 40px; }

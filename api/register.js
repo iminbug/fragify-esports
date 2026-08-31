@@ -138,7 +138,9 @@ export default async function handler(req, res) {
       await kv.set(`registrations:phone:${digits}`, slot);
       await kv.set(`registrations:${slot}`, registration);
 
-      const waLink = (await kv.get("config:whatsapp_link")) || "https://chat.whatsapp.com/";
+      // null when no community link is configured — the UI then tells the team the
+      // link is coming rather than rendering a button that goes nowhere.
+      const waLink = (await kv.get("config:whatsapp_link")) || null;
 
       return res.status(200).json({
         ok: true,

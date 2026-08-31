@@ -27,11 +27,14 @@ async function apiPost(path, body) {
 
 const API = {
   slots: () => apiGet("/api/register"),
+  config: () => apiGet("/api/config"),
   register: (data) => apiPost("/api/register", data),
   updateLink: (whatsappLink, adminKey) =>
     apiPost("/api/config", { whatsappLink, adminKey }),
   setRegistrationOpen: (registrationOpen, adminKey) =>
     apiPost("/api/config", { registrationOpen, adminKey }),
+  updateTournament: (tournament, adminKey) =>
+    apiPost("/api/config", { tournament, adminKey }),
   listRegistrations: (adminKey) =>
     apiPost("/api/admin", { action: "list", adminKey }),
   resetSlots: (adminKey) =>
@@ -109,6 +112,75 @@ function updateAdminToggleLabel() {
   btn.textContent = registrationOpen
     ? "🟢 Registration: LIVE — tap to close"
     : "🔴 Registration: CLOSED — tap to open";
+}
+
+/* ---------- Match details ---------- */
+/* Field order here drives both the public tiles and the admin form. */
+const DETAIL_TILES = [
+  { key: "date", label: "Date", icon: "📅" },
+  { key: "time", label: "Time", icon: "⏰" },
+  { key: "maps", label: "Maps", icon: "🗺️" },
+  { key: "slots", label: "Slots", icon: "👥" },
+  { key: "entryFee", label: "Entry Fee", icon: "💵" },
+  { key: "prizePool", label: "Prize Pool", icon: "💰" },
+];
+const PRIZE_TILES = [
+  { key: "prize1", label: "1st Place", icon: "🥇" },
+  { key: "prize2", label: "2nd Place", icon: "🥈" },
+  { key: "prizeKills", label: "Highest Kills", icon: "🎯" },
+];
+
+let tournament = {};
+
+function renderDetails() {
+  const tiles = DETAIL_TILES.filter((t) => tournament[t.key]);
+  const prizes = PRIZE_TILES.filter((t) => tournament[t.key]);
+  const rules = Array.isArray(tournament.rules) ? tournament.rules : [];
+
+  el("detailGrid").innerHTML = tiles
+    .map(
+      (t) => `
+      <div class="detail">
+        <span class="detail__icon">${t.icon}</span>
+        <span>
+          <span class="detail__label">${t.label}</span>
+          <span class="detail__value">${escapeHtml(tournament[t.key])}</span>
+        </span>
+      </div>`
+    )
+    .join("");
+
+  el("prizeList").innerHTML = prizes
+    .map(
+      (t) => `
+      <div class="prize">
+        <span class="prize__icon">${t.icon}</span>
+        <span class="prize__label">${t.label}</span>
+        <span class="prize__value">${escapeHtml(tournament[t.key])}</span>
+      </div>`
+    )
+    .join("");
+
+  el("rulesList").innerHTML = rules
+    .map((r) => `<li>${escapeHtml(r)}</li>`)
+    .join("");
+
+  el("prizeBox").hidden = prizes.length === 0;
+  el("rulesBox").hidden = rules.length === 0;
+  // Nothing configured yet — keep the whole section out of the page.
+  el("detailsSection").hidden =
+    tiles.length === 0 && prizes.length === 0 && rules.length === 0;
+}
+
+async function loadDetails() {
+  try {
+    const { tournament: t } = await API.config();
+    tournament = t && typeof t === "object" ? t : {};
+  } catch (err) {
+    console.error("Details fetch failed:", err);
+    tournament = {};
+  }
+  renderDetails();
 }
 
 /* ---------- Validation ---------- */
@@ -207,12 +279,42 @@ form.addEventListener("submit", async (e) => {
 });
 
 /* ---------- Success modal ---------- */
+/* A blank or relative href would make target="_blank" reopen this very page — on an
+   ?admin=true URL that looks like the admin panel hijacking the button. Only ever
+   hand the anchor a real absolute http(s) link. */
+function normalizeWaLink(raw) {
+  const value = String(raw || "").trim();
+  if (!value) return null;
+  const withScheme = /^https?:\/\//i.test(value) ? value : "https://" + value;
+  try {
+    const url = new URL(withScheme);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function showSuccess(teamName, res) {
   el("slotNumber").textContent = "#" + String(res.slot).padStart(2, "0");
   el("modalTeam").textContent = teamName;
   el("credId").textContent = res.teamId;
   el("credPass").textContent = res.password;
-  el("waLink").href = res.waLink;
+
+  const waBtn = el("waLink");
+  const link = normalizeWaLink(res.waLink);
+  if (link) {
+    waBtn.href = link;
+    waBtn.hidden = false;
+    el("modalHint").textContent =
+      "Save your Team ID & Password. You'll need them in the community for your room details.";
+  } else {
+    // No community link configured yet — a dead button is worse than none.
+    waBtn.removeAttribute("href");
+    waBtn.hidden = true;
+    el("modalHint").textContent =
+      "Save your Team ID & Password — screenshot this. The WhatsApp community link will be shared with you shortly.";
+  }
+
   modal.hidden = false;
   document.body.style.overflow = "hidden";
 }
@@ -307,6 +409,66 @@ el("adminToggleBtn").addEventListener("click", async () => {
   }
 });
 
+/* ---------- Admin: match details editor ---------- */
+const detailsModal = el("detailsModal");
+const detailsForm = el("detailsForm");
+
+function setDetailsAlert(msg) {
+  const alert = el("detailsAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
+
+function closeDetailsModal() {
+  detailsModal.hidden = true;
+}
+
+el("adminDetailsBtn").addEventListener("click", () => {
+  setDetailsAlert("");
+  // Prefill from whatever is live so an edit never silently wipes other fields.
+  for (const { key } of [...DETAIL_TILES, ...PRIZE_TILES]) {
+    detailsForm[key].value = tournament[key] || "";
+  }
+  detailsForm.rules.value = Array.isArray(tournament.rules)
+    ? tournament.rules.join("\n")
+    : "";
+  detailsModal.hidden = false;
+});
+
+detailsModal.querySelector(".modal__close").addEventListener("click", closeDetailsModal);
+detailsModal.querySelector(".modal__backdrop").addEventListener("click", closeDetailsModal);
+
+detailsForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setDetailsAlert("");
+
+  const payload = {};
+  for (const { key } of [...DETAIL_TILES, ...PRIZE_TILES]) {
+    payload[key] = detailsForm[key].value.trim();
+  }
+  payload.rules = detailsForm.rules.value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const saveBtn = el("detailsSaveBtn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving…";
+
+  try {
+    const res = await API.updateTournament(payload, adminKey);
+    tournament = res.tournament || {};
+    renderDetails();
+    closeDetailsModal();
+    alert("✅ Match details updated");
+  } catch (err) {
+    setDetailsAlert(err.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save Details";
+  }
+});
+
 el("adminLinkBtn").addEventListener("click", async () => {
   const newLink = prompt("New WhatsApp Community Link:");
   if (!newLink) return;
@@ -342,4 +504,5 @@ function escapeHtml(str) {
 /* ---------- Init ---------- */
 el("year").textContent = new Date().getFullYear();
 renderSlots();
+loadDetails();
 setInterval(renderSlots, 10000); // keep the counter fresh
