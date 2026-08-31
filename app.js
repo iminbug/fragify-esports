@@ -87,11 +87,35 @@ async function renderSlots() {
 }
 
 /* ---------- Validation ---------- */
+const MEMBER_FIELDS = ["member2", "member3", "member4", "member5"];
+
 function setError(name, msg) {
   const field = form.querySelector(`[name="${name}"]`).closest(".field");
   const errEl = form.querySelector(`.field__error[data-for="${name}"]`);
   field.classList.toggle("has-error", !!msg);
   errEl.textContent = msg || "";
+}
+
+function setFormAlert(msg) {
+  const alert = el("formAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
+
+/* Route a server error to the field it belongs to, so the user sees it in context. */
+function showServerError(msg) {
+  const m = msg.toLowerCase();
+  if (m.includes("number") || m.includes("phone")) setError("phone", msg);
+  else if (m.includes("team name")) setError("teamName", msg);
+  else if (m.includes("leader")) setError("leaderName", msg);
+  else setFormAlert(msg);
+}
+
+/* Filled-in member IGNs, in order. Blanks are skipped — members are optional. */
+function collectMembers() {
+  return MEMBER_FIELDS
+    .map((name) => form[name].value.trim())
+    .filter(Boolean);
 }
 
 function validate(data) {
@@ -110,17 +134,35 @@ function validate(data) {
     setError("phone", "Phone number must be exactly 10 digits."); ok = false;
   } else setError("phone", "");
 
+  // Members are optional — only the ones actually filled in get validated.
+  const seen = [(data.leaderName || "").toLowerCase()];
+  for (const name of MEMBER_FIELDS) {
+    const value = form[name].value.trim();
+    if (!value) { setError(name, ""); continue; }
+
+    if (value.length < 2) {
+      setError(name, "IGN must be at least 2 characters."); ok = false; continue;
+    }
+    if (seen.includes(value.toLowerCase())) {
+      setError(name, "This IGN is already in your squad."); ok = false; continue;
+    }
+    setError(name, "");
+    seen.push(value.toLowerCase());
+  }
+
   return ok;
 }
 
 /* ---------- Submit ---------- */
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
+  setFormAlert("");
 
   const data = {
     teamName: form.teamName.value.trim(),
     leaderName: form.leaderName.value.trim(),
     phone: form.phone.value.trim(),
+    members: collectMembers(),
   };
   if (!validate(data)) return;
 
@@ -132,7 +174,7 @@ form.addEventListener("submit", async (e) => {
     showSuccess(data.teamName, res);
     form.reset();
   } catch (err) {
-    setError("phone", err.message);
+    showServerError(err.message);
   } finally {
     await renderSlots();
     submitBtn.disabled = false;
@@ -191,14 +233,20 @@ el("adminViewBtn").addEventListener("click", async () => {
   try {
     const { registrations } = await API.listRegistrations(adminKey);
     regList.innerHTML = registrations.length
-      ? registrations.map((r) => `
+      ? registrations.map((r) => {
+          const members = Array.isArray(r.members) ? r.members : [];
+          const squad = members.length
+            ? `Squad: ${members.map(escapeHtml).join(", ")}<br/>`
+            : "";
+          return `
           <div style="border-bottom:1px solid var(--border);padding:12px 0">
             <strong style="color:var(--accent)">Slot #${String(r.slot_number).padStart(2, "0")}</strong><br/>
             Team: ${escapeHtml(r.team_name)}<br/>
             Leader: ${escapeHtml(r.leader_name)}<br/>
-            Phone: ${escapeHtml(r.phone)}<br/>
+            ${squad}Phone: ${escapeHtml(r.phone)}<br/>
             ID: ${escapeHtml(r.team_id)} · Pass: ${escapeHtml(r.password)}
-          </div>`).join("")
+          </div>`;
+        }).join("")
       : "<p style='text-align:center;color:var(--muted)'>No registrations yet</p>";
   } catch (err) {
     regList.innerHTML = `<p style="text-align:center;color:var(--danger)">${escapeHtml(err.message)}</p>`;

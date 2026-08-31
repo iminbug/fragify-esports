@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   if (action === "list") {
     const { data, error } = await supabase
       .from("registrations")
-      .select("slot_number, team_name, leader_name, phone, team_id, password")
+      .select("slot_number, team_name, leader_name, phone, members, team_id, password")
       .order("slot_number", { ascending: true });
 
     if (error) return res.status(500).json({ error: error.message });

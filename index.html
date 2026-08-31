@@ -3,26 +3,50 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0a0a0f" />
-  <title>Fragify Esports — Tournament Registration</title>
-  <meta name="description" content="Register your team for the Fragify Esports tournament. Only 16 slots. First come, first frag." />
+  <meta name="theme-color" content="#0b0c08" />
+  <title>Fragify Esports — BGMI Tournament Registration</title>
+  <meta name="description" content="Register your squad for the Fragify Esports BGMI tournament. Only 16 slots. First come, first frag." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230b0c08'/><g fill='none' stroke='%23ff9b21' stroke-width='4' stroke-linecap='round'><circle cx='32' cy='32' r='15'/><path d='M32 7v11M32 46v11M7 32h11M46 32h11'/></g><circle cx='32' cy='32' r='4' fill='%23ffd54a'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- Icon sprite -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-yt" viewBox="0 0 24 24">
+      <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.5 15.6V8.4l6.3 3.6-6.3 3.6z"/>
+    </symbol>
+    <symbol id="i-ig" viewBox="0 0 24 24">
+      <path d="M12 2.2c3.2 0 3.6 0 4.9.1 1.2.1 1.8.2 2.2.4.6.2 1 .5 1.4.9.4.4.7.8.9 1.4.2.4.4 1 .4 2.2.1 1.3.1 1.7.1 4.9s0 3.6-.1 4.9c-.1 1.2-.2 1.8-.4 2.2-.2.6-.5 1-.9 1.4-.4.4-.8.7-1.4.9-.4.2-1 .4-2.2.4-1.3.1-1.7.1-4.9.1s-3.6 0-4.9-.1c-1.2-.1-1.8-.2-2.2-.4-.6-.2-1-.5-1.4-.9-.4-.4-.7-.8-.9-1.4-.2-.4-.4-1-.4-2.2-.1-1.3-.1-1.7-.1-4.9s0-3.6.1-4.9c.1-1.2.2-1.8.4-2.2.2-.6.5-1 .9-1.4.4-.4.8-.7 1.4-.9.4-.2 1-.4 2.2-.4 1.3-.1 1.7-.1 4.9-.1zm0 3.1A6.7 6.7 0 1 0 18.7 12 6.7 6.7 0 0 0 12 5.3zm0 11A4.3 4.3 0 1 1 16.3 12 4.3 4.3 0 0 1 12 16.3zm6.9-11.2a1.6 1.6 0 1 1-1.6-1.6 1.6 1.6 0 0 1 1.6 1.6z"/>
+    </symbol>
+    <symbol id="i-call" viewBox="0 0 24 24">
+      <path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.2 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .6 3.6 1 1 0 0 1-.2 1l-2.3 2.2z"/>
+    </symbol>
+    <symbol id="i-wa" viewBox="0 0 24 24">
+      <path d="M17.5 14.4c-.3-.1-1.7-.9-2-1-.3-.1-.5-.1-.7.1-.2.3-.7 1-.9 1.2-.2.2-.3.2-.6.1a8 8 0 0 1-2.4-1.5 9 9 0 0 1-1.6-2c-.2-.3 0-.5.1-.6l.5-.6a2 2 0 0 0 .3-.5.5.5 0 0 0 0-.5c0-.2-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6a1.1 1.1 0 0 0-.8.4 3.4 3.4 0 0 0-1 2.5 5.8 5.8 0 0 0 1.2 3.1 13.4 13.4 0 0 0 5.2 4.6c.7.3 1.3.5 1.7.6a4.1 4.1 0 0 0 1.9.1 3.1 3.1 0 0 0 2-1.4 2.5 2.5 0 0 0 .2-1.4c-.1-.1-.3-.2-.6-.3zM12 2a10 10 0 0 0-8.5 15.3L2 22l4.8-1.5A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-2.9.9.9-2.8-.2-.3A8.2 8.2 0 1 1 12 20.2z"/>
+    </symbol>
+  </svg>
+
   <!-- Animated backdrop -->
   <div class="bg-grid" aria-hidden="true"></div>
   <div class="bg-glow bg-glow--1" aria-hidden="true"></div>
   <div class="bg-glow bg-glow--2" aria-hidden="true"></div>
+  <div class="bg-drop" aria-hidden="true">📦</div>
 
   <header class="nav">
     <div class="nav__brand">
       <div class="nav__icon">
-        <span>⚡</span>
+        <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden="true">
+          <g fill="none" stroke="#14150f" stroke-width="5" stroke-linecap="round">
+            <circle cx="32" cy="32" r="15" />
+            <path d="M32 6v12M32 46v12M6 32h12M46 32h12" />
+          </g>
+          <circle cx="32" cy="32" r="4" fill="#14150f" />
+        </svg>
       </div>
-      <span class="nav__name">FRAGIFY<span class="accent"> ESPORTS</span></span>
+      <span class="nav__name">FRAGIFY<span class="accent"> ESPORTS</span><span class="nav__tag">BETA</span></span>
     </div>
     <div class="nav__status" id="navStatus">
       <span class="dot"></span>
@@ -33,15 +57,15 @@
   <main>
     <!-- HERO -->
     <section class="hero">
-      <p class="hero__eyebrow">// SEASON 01 · SQUAD SHOWDOWN</p>
+      <p class="hero__eyebrow">// BGMI SEASON 01 · ERANGEL SQUAD SHOWDOWN</p>
       <h1 class="hero__title">
         REGISTER YOUR SQUAD.<br />
         <span class="accent">CLAIM YOUR SLOT.</span>
       </h1>
       <p class="hero__sub">
-        Only <strong>16 teams</strong> make it in. Registration closes the moment the last
-        slot is gone. Lock in your squad, get your slot number, and drop into the WhatsApp
-        community for your room ID &amp; password.
+        Only <strong>16 teams</strong> drop in. Registration closes the moment the last
+        slot is gone. Lock in your squad, get your slot number, and join the WhatsApp
+        community for your room ID &amp; password. <strong>Winner Winner Chicken Dinner</strong> awaits. 🍗
       </p>
 
       <!-- SLOTS COUNTER -->
@@ -61,19 +85,19 @@
     <!-- INFO CARDS -->
     <section class="cards">
       <div class="card">
-        <div class="card__icon">🎯</div>
-        <h3>16 Teams Only</h3>
-        <p>Hard cap. When the 16th team registers, the gate auto-locks. No exceptions.</p>
+        <div class="card__icon">🪖</div>
+        <h3>16 Squads Only</h3>
+        <p>Hard cap. When the 16th squad registers, the lobby auto-locks. No exceptions.</p>
       </div>
       <div class="card">
-        <div class="card__icon">🎟️</div>
+        <div class="card__icon">🎯</div>
         <h3>Instant Slot</h3>
         <p>Your slot number is assigned the second you register. Shown on screen instantly.</p>
       </div>
       <div class="card">
-        <div class="card__icon">💬</div>
-        <h3>WhatsApp Community</h3>
-        <p>Get the community invite link with your room ID &amp; password after registering.</p>
+        <div class="card__icon">📦</div>
+        <h3>Room ID &amp; Pass</h3>
+        <p>Get the WhatsApp community invite with your room ID &amp; password after registering.</p>
       </div>
     </section>
 
@@ -103,6 +127,36 @@
           <small class="field__error" data-for="phone"></small>
         </div>
 
+        <fieldset class="squad">
+          <legend class="squad__legend">
+            Squad Members <span class="squad__optional">Optional</span>
+          </legend>
+          <p class="squad__hint">Leader is Player 1. Baaki squad abhi add kar lein, ya baad me community me IGNs share kar dein.</p>
+
+          <div class="field">
+            <label for="member2">Player 2 (IGN)</label>
+            <input type="text" id="member2" name="member2" placeholder="In-game name" autocomplete="off" />
+            <small class="field__error" data-for="member2"></small>
+          </div>
+          <div class="field">
+            <label for="member3">Player 3 (IGN)</label>
+            <input type="text" id="member3" name="member3" placeholder="In-game name" autocomplete="off" />
+            <small class="field__error" data-for="member3"></small>
+          </div>
+          <div class="field">
+            <label for="member4">Player 4 (IGN)</label>
+            <input type="text" id="member4" name="member4" placeholder="In-game name" autocomplete="off" />
+            <small class="field__error" data-for="member4"></small>
+          </div>
+          <div class="field">
+            <label for="member5">Substitute (IGN)</label>
+            <input type="text" id="member5" name="member5" placeholder="In-game name" autocomplete="off" />
+            <small class="field__error" data-for="member5"></small>
+          </div>
+        </fieldset>
+
+        <p class="form__alert" id="formAlert" role="alert" hidden></p>
+
         <button type="submit" class="btn btn--primary form__submit" id="submitBtn">
           Lock My Slot →
         </button>
@@ -114,6 +168,40 @@
         <div class="closed__icon">🔒</div>
         <h2>Registration Closed</h2>
         <p>All 16 slots are filled. Follow us for the next season drop.</p>
+      </div>
+    </section>
+
+    <!-- CONNECT -->
+    <section class="connect" id="connect">
+      <div class="connect__head">
+        <h2>Squad Up With Us</h2>
+        <p>Live streams, highlights and tournament updates — plus a direct line if you're stuck.</p>
+      </div>
+
+      <div class="socials">
+        <a class="social social--yt" href="https://www.youtube.com/@FragifyEsports" target="_blank" rel="noopener">
+          <span class="social__icon"><svg aria-hidden="true"><use href="#i-yt" /></svg></span>
+          <span>
+            <span class="social__label">YouTube</span>
+            <span class="social__value">@FragifyEsports</span>
+          </span>
+        </a>
+
+        <a class="social social--ig" href="https://www.instagram.com/fragifyesports" target="_blank" rel="noopener">
+          <span class="social__icon"><svg aria-hidden="true"><use href="#i-ig" /></svg></span>
+          <span>
+            <span class="social__label">Instagram</span>
+            <span class="social__value">@fragifyesports</span>
+          </span>
+        </a>
+
+        <a class="social social--call" href="tel:+919217191222">
+          <span class="social__icon"><svg aria-hidden="true"><use href="#i-call" /></svg></span>
+          <span>
+            <span class="social__label">Call / WhatsApp</span>
+            <span class="social__value">+91 92171 91222</span>
+          </span>
+        </a>
       </div>
     </section>
   </main>
@@ -146,7 +234,22 @@
   </div>
 
   <footer class="footer">
+    <nav class="footer__links" aria-label="Fragify Esports social links">
+      <a href="https://www.youtube.com/@FragifyEsports" target="_blank" rel="noopener">
+        <svg aria-hidden="true"><use href="#i-yt" /></svg> YouTube
+      </a>
+      <a href="https://www.instagram.com/fragifyesports" target="_blank" rel="noopener">
+        <svg aria-hidden="true"><use href="#i-ig" /></svg> Instagram
+      </a>
+      <a href="https://wa.me/919217191222" target="_blank" rel="noopener">
+        <svg aria-hidden="true"><use href="#i-wa" /></svg> WhatsApp
+      </a>
+      <a href="tel:+919217191222">
+        <svg aria-hidden="true"><use href="#i-call" /></svg> 92171 91222
+      </a>
+    </nav>
     <p>© <span id="year"></span> Fragify Esports · Built for the grind.</p>
+    <p class="footer__note">Not affiliated with or endorsed by Krafton or BGMI.</p>
   </footer>
 
   <!-- ADMIN PANEL (hidden by default) -->
