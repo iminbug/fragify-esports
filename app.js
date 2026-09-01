@@ -285,17 +285,36 @@ function setUtrAlert(msg) {
   alert.hidden = !msg;
 }
 
-/* UPI deep link. Built with encodeURIComponent rather than URLSearchParams because the
-   latter encodes spaces as "+", and UPI apps show that literally in the payee name. */
-function upiLink(fee, teamId) {
-  const q = [
+/* A bare upi:// link opens Android's app chooser, and if WhatsApp Pay gets picked it
+   refuses the payment outright ("pay with a QR code instead"). Each app's own scheme
+   skips the chooser, so the money app the team taps is the one that opens.
+
+   Built with encodeURIComponent rather than URLSearchParams because the latter encodes
+   spaces as "+", and UPI apps show that literally in the payee name. */
+const UPI_APPS = [
+  { id: "PhonePe", scheme: "phonepe://pay" },
+  { id: "Gpay", scheme: "tez://upi/pay" },
+  { id: "Paytm", scheme: "paytmmp://pay" },
+  { id: "Any", scheme: "upi://pay" },
+];
+
+function upiQuery(fee, teamId) {
+  return [
     "pa=" + encodeURIComponent(fee.vpa),
     "pn=" + encodeURIComponent(fee.name || "Fragify Esports"),
     "am=" + encodeURIComponent(fee.amount),
     "cu=INR",
     "tn=" + encodeURIComponent("Fragify entry " + teamId),
-  ];
-  return "upi://pay?" + q.join("&");
+  ].join("&");
+}
+
+/* Points a set of app buttons at the same payment. `prefix` is the id prefix the
+   markup uses — "pay" for the entry-fee card, "modal" for the confirmation. */
+function setPayLinks(prefix, fee, teamId) {
+  const query = upiQuery(fee, teamId);
+  for (const app of UPI_APPS) {
+    el(prefix + app.id).href = app.scheme + "?" + query;
+  }
 }
 
 function showPayGate(message) {
@@ -341,8 +360,7 @@ function showPayPanel(info) {
 
   const fee = info.entryFee || entryFee;
   if (due && fee) {
-    el("payNowBtn").href = upiLink(fee, info.teamId);
-    el("payNowBtn").textContent = `Pay ₹${fee.amount} via UPI`;
+    setPayLinks("pay", fee, info.teamId);
     el("payVpa").textContent = fee.vpa;
   }
 
@@ -668,27 +686,25 @@ function showSuccess(teamName, res) {
   }
 
   const payNote = el("modalPayNote");
-  const payBtn = el("modalPayBtn");
+  const payApps = el("modalApps");
   if (res.paymentDue) {
     // The slot is reserved, not confirmed — say so plainly rather than letting the
     // team walk away thinking they're in. Only the trailing text node is swapped so
     // the slot-number span survives.
     el("modalTitle").lastChild.textContent = " reserved";
     payNote.textContent =
-      `⚠️ ₹${res.paymentDue.amount} entry fee ${res.paymentDue.holdMinutes} minute ke andar bharo, warna slot chala jayega. Payment ke baad UTR submit karna hai.`;
+      `⚠️ ₹${res.paymentDue.amount} entry fee ${res.paymentDue.holdMinutes} minute ke andar bharo, warna slot chala jayega. Apna app chuno — amount bhara hua milega.`;
     payNote.hidden = false;
 
     // The VPA comes back with the registration, so this works even if the fee was
     // configured after this page was loaded.
-    payBtn.href = upiLink(res.paymentDue, res.teamId);
-    payBtn.textContent = `Pay ₹${res.paymentDue.amount} via UPI`;
-    payBtn.hidden = false;
+    setPayLinks("modal", res.paymentDue, res.teamId);
+    payApps.hidden = false;
     el("modalClose").textContent = "Payment kar liya → UTR daalo";
     pendingPayment = true;
   } else {
     payNote.hidden = true;
-    payBtn.hidden = true;
-    payBtn.removeAttribute("href");
+    payApps.hidden = true;
     el("modalClose").textContent = "Done";
     pendingPayment = false;
   }

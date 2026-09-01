@@ -189,11 +189,20 @@
 
           <!-- Everything below is only for a team that still owes money -->
           <div id="payDue" hidden>
-            <a class="btn btn--primary pay__btn" id="payNowBtn" href="#">Pay via UPI</a>
+            <p class="pay__apps-label">Apna UPI app chuno — amount aur note apne aap bhar jayenge:</p>
+            <div class="pay__apps">
+              <a class="pay__app" id="payPhonePe" href="#">PhonePe</a>
+              <a class="pay__app" id="payGpay" href="#">Google Pay</a>
+              <a class="pay__app" id="payPaytm" href="#">Paytm</a>
+              <a class="pay__app" id="payAny" href="#">Koi aur UPI app</a>
+            </div>
+
             <p class="pay__vpa">
-              UPI ID: <span class="pay__vpa-value" id="payVpa">—</span>
+              Ya UPI ID copy karke manually bhejo:
+              <span class="pay__vpa-value" id="payVpa">—</span>
               <button type="button" class="pay__copy" id="payCopyBtn">Copy</button>
             </p>
+            <p class="pay__warn">⚠️ WhatsApp Pay se mat bhejo — wo is tarah ke link support nahi karta.</p>
 
             <form class="pay__utr" id="utrForm">
               <div class="field">
@@ -362,7 +371,12 @@
       </a>
       <p class="modal__hint" id="modalHint">Save your Team ID &amp; Password. You'll need them in the community for your room details.</p>
       <p class="modal__pay" id="modalPayNote" hidden></p>
-      <a href="#" class="btn btn--primary modal__pay-btn" id="modalPayBtn" hidden>Pay Now</a>
+      <div class="modal__apps" id="modalApps" hidden>
+        <a class="pay__app" id="modalPhonePe" href="#">PhonePe</a>
+        <a class="pay__app" id="modalGpay" href="#">Google Pay</a>
+        <a class="pay__app" id="modalPaytm" href="#">Paytm</a>
+        <a class="pay__app" id="modalAny" href="#">Koi aur UPI app</a>
+      </div>
       <button class="modal__close" id="modalClose">Done</button>
     </div>
   </div>
