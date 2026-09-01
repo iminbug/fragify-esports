@@ -187,13 +187,22 @@
           <p class="pay__status" id="payStatus"></p>
           <p class="pay__hold" id="payHold" hidden></p>
 
-          <!-- Everything below is only for a team that still owes money.
-               Manual first: a typed VPA always goes through, while a link-started
-               payment depends on what the paying app allows. -->
+          <!-- Everything below is only for a team that still owes money. Three steps,
+               in order: scan or copy, pay, then hand back the UTR. Deep links into the
+               UPI apps are deliberately gone — they got refused often enough that
+               offering them only sent teams down a dead end. -->
           <div id="payDue" hidden>
-            <p class="pay__manual-label">
-              <strong>Sabse pakka tareeka</strong> — ye UPI ID copy karke apne UPI app me paste karo:
-            </p>
+            <!-- Step 1. The QR needs qr.png in the deploy; app.js hides the whole
+                 figure if that file isn't there. -->
+            <figure class="pay__qr" id="payQrBox" hidden>
+              <figcaption class="pay__step">Step 1 — QR scan karo</figcaption>
+              <img class="pay__qr-img" id="payQr" src="qr.png" alt="Entry fee payment QR code" />
+              <figcaption class="pay__qr-note">
+                Image dabakar save karo, phir apne UPI app me <strong>"Scan from gallery"</strong> chuno.
+              </figcaption>
+            </figure>
+
+            <p class="pay__step" id="payIdsStep">Ya UPI ID copy karke app me paste karo</p>
             <div class="pay__ids">
               <div class="pay__id-row">
                 <span class="pay__id-label">UPI ID</span>
@@ -217,29 +226,8 @@
               </div>
             </div>
 
-            <!-- Shown only if qr.png actually exists in the deploy; app.js unhides it
-                 on load. A scanned QR carries its own signature, so this route works
-                 where an intent link gets refused. -->
-            <figure class="pay__qr" id="payQrBox" hidden>
-              <figcaption class="pay__qr-label">Ya QR scan karo — image dabakar save karo, phir UPI app me "Scan from gallery" chuno:</figcaption>
-              <img class="pay__qr-img" id="payQr" src="qr.png" alt="Entry fee payment QR code" />
-              <figcaption class="pay__qr-note">Amount khud daalna hoga — <strong id="payQrAmt">—</strong>. Note me apna Team ID likhna mat bhoolna.</figcaption>
-            </figure>
-
-            <p class="pay__apps-label">Ya seedha app khol lo — amount aur note apne aap bhar jayenge:</p>
-            <div class="pay__apps">
-              <a class="pay__app" id="payPhonePe" href="#">PhonePe</a>
-              <a class="pay__app" id="payGpay" href="#">Google Pay</a>
-              <a class="pay__app" id="payPaytm" href="#">Paytm</a>
-              <a class="pay__app" id="payAny" href="#">Koi aur UPI app</a>
-            </div>
-            <ul class="pay__tips">
-              <li>App bole <strong>"receiver is not accepting payments on this specific UPI ID"</strong> — to upar wali UPI ID copy karke <strong>manually</strong> bhejo. Paisa nahi katta, wahi payment chal jayegi.</li>
-              <li>App me <strong>"You can pay up to ₹2,000 with QR codes"</strong> wala notice aaye to <strong>DISMISS</strong> dabao — wo error nahi hai.</li>
-              <li>WhatsApp Pay se mat bhejo — usme ye link theek se nahi chalta.</li>
-            </ul>
-
             <form class="pay__utr" id="utrForm">
+              <p class="pay__step">Step 2 — payment ka UTR yahan daalo</p>
               <div class="field">
                 <label for="payUtr">UTR / Transaction ID</label>
                 <input type="text" id="payUtr" placeholder="UPI app me payment ke baad milta hai" autocomplete="off" />
@@ -415,15 +403,6 @@
       </a>
       <p class="modal__hint" id="modalHint">Save your Team ID &amp; Password. You'll need them in the community for your room details.</p>
       <p class="modal__pay" id="modalPayNote" hidden></p>
-      <div class="modal__apps" id="modalApps" hidden>
-        <a class="pay__app" id="modalPhonePe" href="#">PhonePe</a>
-        <a class="pay__app" id="modalGpay" href="#">Google Pay</a>
-        <a class="pay__app" id="modalPaytm" href="#">Paytm</a>
-        <a class="pay__app" id="modalAny" href="#">Koi aur UPI app</a>
-      </div>
-      <p class="modal__tip" id="modalTip" hidden>
-        App payment reject kare to <strong>Done</strong> dabao — neeche UPI ID copy karke manually bhej sakte ho.
-      </p>
       <button class="modal__close" id="modalClose">Done</button>
     </div>
   </div>

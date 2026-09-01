@@ -337,53 +337,15 @@ function setUtrAlert(msg) {
   alert.hidden = !msg;
 }
 
-/* A bare upi:// link opens Android's app chooser, and if WhatsApp Pay gets picked it
-   refuses the payment outright ("pay with a QR code instead"). Each app's own scheme
-   skips the chooser, so the money app the team taps is the one that opens.
-
-   Built with encodeURIComponent rather than URLSearchParams because the latter encodes
-   spaces as "+", and UPI apps show that literally in the payee name. */
-const UPI_APPS = [
-  { id: "PhonePe", scheme: "phonepe://pay" },
-  { id: "Gpay", scheme: "tez://upi/pay" },
-  { id: "Paytm", scheme: "paytmmp://pay" },
-  { id: "Any", scheme: "upi://pay" },
-];
-
-function upiQuery(fee, teamId) {
-  const parts = [
-    "pa=" + encodeURIComponent(fee.vpa),
-    "pn=" + encodeURIComponent(fee.name || "Fragify Esports"),
-  ];
-  // Merchant-QR signature parameters, verbatim from the QR the admin pasted. A
-  // merchant VPA sent without them is refused: "the receiver is not accepting
-  // payments on this specific UPI ID".
-  for (const [key, value] of Object.entries(fee.extra || {})) {
-    parts.push(key + "=" + encodeURIComponent(value));
-  }
-  parts.push("am=" + encodeURIComponent(fee.amount));
-  parts.push("cu=INR");
-  parts.push("tn=" + encodeURIComponent("Fragify entry " + teamId));
-  return parts.join("&");
-}
-
 /* What the admin field should hold: a bare VPA when that's all there is, and the whole
-   signed link when the fee came from a merchant QR. */
+   signed link when the fee came from a merchant QR, so re-saving can't drop the
+   signature. */
 function payeeField(fee) {
   const extra = Object.entries(fee.extra || {});
   if (!extra.length) return fee.vpa || "";
   const parts = ["pa=" + encodeURIComponent(fee.vpa)];
   for (const [key, value] of extra) parts.push(key + "=" + encodeURIComponent(value));
   return "upi://pay?" + parts.join("&");
-}
-
-/* Points a set of app buttons at the same payment. `prefix` is the id prefix the
-   markup uses — "pay" for the entry-fee card, "modal" for the confirmation. */
-function setPayLinks(prefix, fee, teamId) {
-  const query = upiQuery(fee, teamId);
-  for (const app of UPI_APPS) {
-    el(prefix + app.id).href = app.scheme + "?" + query;
-  }
 }
 
 function showPayGate(message) {
@@ -429,10 +391,8 @@ function showPayPanel(info) {
 
   const fee = info.entryFee || entryFee;
   if (due && fee) {
-    setPayLinks("pay", fee, info.teamId);
     el("payVpa").textContent = fee.vpa;
     el("payAmt").textContent = String(fee.amount);
-    el("payQrAmt").textContent = "₹" + fee.amount;
     el("payTn").textContent = info.teamId;
     // Paying a number instead of a VPA is the route the UPI apps themselves
     // suggest when they refuse a link, so surface it when one is configured.
@@ -539,13 +499,18 @@ el("utrForm").addEventListener("submit", async (e) => {
 
 /* The QR is optional: drop a qr.png next to index.html and it appears, leave it out
    and nothing shows. Driven by the image's own load result rather than a config flag,
-   so there is no way for the page to promise a QR that isn't there. */
-el("payQr").addEventListener("load", () => {
-  el("payQrBox").hidden = false;
-});
-el("payQr").addEventListener("error", () => {
-  el("payQrBox").hidden = true;
-});
+   so the page can never promise a QR that isn't there.
+
+   app.js runs at the end of the body, by which point a cached qr.png has usually
+   finished loading and its `load` event has already been and gone — so check
+   `complete` up front instead of waiting for an event that will never fire. */
+function syncQrVisibility() {
+  const img = el("payQr");
+  el("payQrBox").hidden = !(img.complete && img.naturalWidth > 0);
+}
+el("payQr").addEventListener("load", syncQrVisibility);
+el("payQr").addEventListener("error", syncQrVisibility);
+syncQrVisibility();
 
 /* Delegated so one handler covers the UPI ID, the mobile number and the note. */
 el("payDue").addEventListener("click", async (e) => {
@@ -782,27 +747,18 @@ function showSuccess(teamName, res) {
   }
 
   const payNote = el("modalPayNote");
-  const payApps = el("modalApps");
   if (res.paymentDue) {
     // The slot is reserved, not confirmed — say so plainly rather than letting the
     // team walk away thinking they're in. Only the trailing text node is swapped so
     // the slot-number span survives.
     el("modalTitle").lastChild.textContent = " reserved";
     payNote.textContent =
-      `⚠️ ₹${res.paymentDue.amount} entry fee ${res.paymentDue.holdMinutes} minute ke andar bharo, warna slot chala jayega. Apna app chuno — amount bhara hua milega.`;
+      `⚠️ ₹${res.paymentDue.amount} entry fee ${res.paymentDue.holdMinutes} minute ke andar bharo, warna slot chala jayega. Neeche QR aur UPI ID mil jayegi.`;
     payNote.hidden = false;
-
-    // The VPA comes back with the registration, so this works even if the fee was
-    // configured after this page was loaded.
-    setPayLinks("modal", res.paymentDue, res.teamId);
-    payApps.hidden = false;
-    el("modalTip").hidden = false;
-    el("modalClose").textContent = "Payment kar liya → UTR daalo";
+    el("modalClose").textContent = "Payment karne chalo →";
     pendingPayment = true;
   } else {
     payNote.hidden = true;
-    payApps.hidden = true;
-    el("modalTip").hidden = true;
     el("modalClose").textContent = "Done";
     pendingPayment = false;
   }

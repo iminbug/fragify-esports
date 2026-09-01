@@ -286,39 +286,13 @@ body {
 .pay__status.is-submitted { color: var(--accent-2); border-color: var(--accent-2); background: rgba(255,213,74,0.08); }
 .pay__status.is-verified { color: var(--whatsapp); border-color: var(--whatsapp); background: rgba(37,211,102,0.08); }
 .pay__hold { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 10px; }
-.pay__apps-label { text-align: center; color: var(--muted); font-size: 0.85rem; margin: 18px 0 12px; }
-.pay__apps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.modal__apps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
-.modal__apps[hidden] { display: none; }
-.pay__app {
-  display: block; text-align: center; text-decoration: none;
-  font-family: "Orbitron", sans-serif; font-size: 0.78rem; font-weight: 800;
-  letter-spacing: 0.5px; color: var(--bg); background: var(--accent);
-  border-radius: 12px; padding: 13px 10px;
+/* Scan or copy, pay, hand back the UTR — the card is numbered so the order is obvious
+   without anyone reading a paragraph first. */
+.pay__step {
+  font-family: "Orbitron", sans-serif; font-size: 0.75rem; font-weight: 800;
+  letter-spacing: 0.5px; color: var(--accent); text-align: center;
+  margin: 22px 0 12px;
 }
-.pay__app:hover { background: var(--accent-2); }
-/* The generic upi:// link is the fallback, so it reads as the quieter option. */
-#payAny, #modalAny { background: var(--bg-soft); color: var(--fg); border: 1px solid var(--border); }
-#payAny:hover, #modalAny:hover { border-color: var(--accent); background: var(--bg-soft); }
-/* Every UPI app shows an NPCI notice over the Pay button for link-started payments.
-   Teams read it as an error, so name it before they meet it. */
-.pay__tips {
-  list-style: none; margin-top: 12px; padding: 12px 14px;
-  border: 1px solid var(--border); border-radius: 12px; background: var(--bg-soft);
-}
-.pay__tips li { color: var(--muted); font-size: 0.8rem; line-height: 1.55; }
-.pay__tips li + li { margin-top: 8px; }
-.pay__tips strong { color: var(--accent-2); }
-.modal__tip {
-  color: var(--muted); font-size: 0.78rem; line-height: 1.5;
-  text-align: center; margin-top: 12px;
-}
-.modal__tip strong { color: var(--accent-2); }
-.modal__tip[hidden] { display: none; }
-/* The manual route leads, because a hand-typed VPA is the one payment path no app
-   ever refuses. */
-.pay__manual-label { color: var(--muted); font-size: 0.85rem; margin: 4px 0 12px; }
-.pay__manual-label strong { color: var(--accent-2); }
 .pay__ids {
   border: 1px solid var(--border); border-radius: 12px;
   background: var(--bg-soft); overflow: hidden;
@@ -341,9 +315,9 @@ body {
 .pay__copy:hover { color: var(--accent); border-color: var(--accent); }
 /* A scanned QR carries its own merchant signature, so this path works even where an
    intent link is refused. White plate because scanners struggle on a dark background. */
-.pay__qr { margin: 18px 0 0; text-align: center; }
+.pay__qr { margin: 0; text-align: center; }
 .pay__qr[hidden] { display: none; }
-.pay__qr-label { color: var(--muted); font-size: 0.85rem; margin-bottom: 12px; }
+.pay__qr .pay__step { margin-top: 4px; }
 .pay__qr-img {
   width: 100%; max-width: 240px; aspect-ratio: 1; object-fit: contain;
   background: #fff; border-radius: 12px; padding: 10px; display: block; margin: 0 auto;
