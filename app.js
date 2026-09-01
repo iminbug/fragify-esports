@@ -449,6 +449,12 @@ async function applyPayment(fee) {
   entryFee = fee;
   const section = el("paymentSection");
 
+  // The admin button names what is live right now. Without it a save looks like it
+  // did nothing — the fee is only visible to a logged-in team, never to the admin.
+  el("adminUpiBtn").textContent = fee
+    ? `💳 Entry Fee: ₹${fee.amount} · ${fee.vpa}`
+    : "💳 Entry Fee: OFF — set karo";
+
   // Say the price on the form itself — nobody should find out there's a fee only
   // after they've filled the whole thing in.
   const feeNote = el("formFeeNote");
