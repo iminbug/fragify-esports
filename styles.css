@@ -339,6 +339,17 @@ body {
   padding: 3px 10px; cursor: pointer; flex: 0 0 auto;
 }
 .pay__copy:hover { color: var(--accent); border-color: var(--accent); }
+/* A scanned QR carries its own merchant signature, so this path works even where an
+   intent link is refused. White plate because scanners struggle on a dark background. */
+.pay__qr { margin: 18px 0 0; text-align: center; }
+.pay__qr[hidden] { display: none; }
+.pay__qr-label { color: var(--muted); font-size: 0.85rem; margin-bottom: 12px; }
+.pay__qr-img {
+  width: 100%; max-width: 240px; aspect-ratio: 1; object-fit: contain;
+  background: #fff; border-radius: 12px; padding: 10px; display: block; margin: 0 auto;
+}
+.pay__qr-note { color: var(--muted); font-size: 0.78rem; line-height: 1.5; margin-top: 10px; }
+.pay__qr-note strong { color: var(--accent-2); }
 .pay__utr { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 18px; }
 .pay__utr .btn { width: 100%; }
 .modal__pay {

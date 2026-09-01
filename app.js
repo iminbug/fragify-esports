@@ -432,6 +432,7 @@ function showPayPanel(info) {
     setPayLinks("pay", fee, info.teamId);
     el("payVpa").textContent = fee.vpa;
     el("payAmt").textContent = String(fee.amount);
+    el("payQrAmt").textContent = "₹" + fee.amount;
     el("payTn").textContent = info.teamId;
     // Paying a number instead of a VPA is the route the UPI apps themselves
     // suggest when they refuse a link, so surface it when one is configured.
@@ -528,6 +529,16 @@ el("utrForm").addEventListener("submit", async (e) => {
     btn.disabled = false;
     btn.textContent = "Submit Payment Reference";
   }
+});
+
+/* The QR is optional: drop a qr.png next to index.html and it appears, leave it out
+   and nothing shows. Driven by the image's own load result rather than a config flag,
+   so there is no way for the page to promise a QR that isn't there. */
+el("payQr").addEventListener("load", () => {
+  el("payQrBox").hidden = false;
+});
+el("payQr").addEventListener("error", () => {
+  el("payQrBox").hidden = true;
 });
 
 /* Delegated so one handler covers the UPI ID, the mobile number and the note. */

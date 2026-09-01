@@ -217,6 +217,15 @@
               </div>
             </div>
 
+            <!-- Shown only if qr.png actually exists in the deploy; app.js unhides it
+                 on load. A scanned QR carries its own signature, so this route works
+                 where an intent link gets refused. -->
+            <figure class="pay__qr" id="payQrBox" hidden>
+              <figcaption class="pay__qr-label">Ya QR scan karo — image dabakar save karo, phir UPI app me "Scan from gallery" chuno:</figcaption>
+              <img class="pay__qr-img" id="payQr" src="qr.png" alt="Entry fee payment QR code" />
+              <figcaption class="pay__qr-note">Amount khud daalna hoga — <strong id="payQrAmt">—</strong>. Note me apna Team ID likhna mat bhoolna.</figcaption>
+            </figure>
+
             <p class="pay__apps-label">Ya seedha app khol lo — amount aur note apne aap bhar jayenge:</p>
             <div class="pay__apps">
               <a class="pay__app" id="payPhonePe" href="#">PhonePe</a>
