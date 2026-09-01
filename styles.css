@@ -584,6 +584,17 @@ body {
   background: linear-gradient(180deg, #22231a, var(--card));
   border: 1px solid var(--accent); border-radius: 18px; padding: 34px 28px;
   box-shadow: 0 20px 80px rgba(255,155,33,0.2); animation: pop .35s cubic-bezier(.2,.9,.3,1.2);
+  /* The card sits in a fixed, centred grid, so anything taller than the screen
+     overflows past both edges and cannot be reached — the Save button included.
+     Cap it to the viewport and let the card scroll instead of the page.
+     dvh repeats the vh value for browsers that have it: on a phone, vh measures the
+     screen with the address bar hidden, which is exactly the strip the last row
+     would disappear behind. overscroll-behavior stops a scroll that reaches the end
+     of the form from carrying on into the page underneath. */
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 @keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .modal__badge {
@@ -693,6 +704,9 @@ body {
   .pay__card { padding: 20px 18px 16px; }
   .prizes__row { grid-template-columns: 1fr; }
   .details-form__grid { grid-template-columns: 1fr; }
+  /* Every field goes full-width on a phone, so the admin forms get long. Trim the
+     card's own padding to buy back a couple of rows before scrolling starts. */
+  .modal__card { padding: 24px 18px; }
   .nav { padding: 16px; }
   .nav__brand { gap: 10px; }
   .nav__icon { width: 40px; height: 40px; }
