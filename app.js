@@ -562,6 +562,8 @@ const DETAIL_TILES = [
 const PRIZE_TILES = [
   { key: "prize1", label: "1st Place", icon: "🥇" },
   { key: "prize2", label: "2nd Place", icon: "🥈" },
+  { key: "prize3", label: "3rd Place", icon: "🥉" },
+  { key: "prize4", label: "4th Place", icon: "🏅" },
   { key: "prizeKills", label: "Highest Kills", icon: "🎯" },
 ];
 

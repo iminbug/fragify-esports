@@ -10,7 +10,7 @@ async function isRegistrationOpen() {
    the page can hide that tile instead of showing an empty one. */
 const DETAIL_KEYS = [
   "date", "time", "maps", "slots", "entryFee",
-  "prizePool", "prize1", "prize2", "prizeKills",
+  "prizePool", "prize1", "prize2", "prize3", "prize4", "prizeKills",
 ];
 const MAX_VALUE_LEN = 120;
 const MAX_RULES = 12;
