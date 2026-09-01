@@ -213,8 +213,16 @@ export default async function handler(req, res) {
         password: password,
         waLink: waLink,
         // Present only for a paid tournament — the UI then sends the team to the
-        // entry-fee section instead of declaring the slot confirmed.
-        paymentDue: entryFee ? { amount: entryFee.amount, holdMinutes: HOLD_MINUTES } : null,
+        // entry-fee section instead of declaring the slot confirmed. The VPA rides
+        // along so the confirmation can offer a Pay button without a second fetch.
+        paymentDue: entryFee
+          ? {
+              amount: entryFee.amount,
+              holdMinutes: HOLD_MINUTES,
+              vpa: entryFee.vpa,
+              name: entryFee.name,
+            }
+          : null,
       });
     } catch (err) {
       return res.status(500).json({ error: err.message });

@@ -306,6 +306,19 @@ body {
   background: rgba(255,77,61,0.08); padding: 12px 14px; margin-top: 12px;
 }
 .modal__pay[hidden] { display: none; }
+.modal__pay-btn { display: block; width: 100%; text-align: center; margin-top: 14px; }
+.modal__pay-btn[hidden] { display: none; }
+
+/* The page scrolls here on its own after registration — a beat of glow so the team
+   sees where they landed. */
+.pay--flash .pay__card { animation: pay-flash 1.6s ease-out 1; }
+@keyframes pay-flash {
+  0%, 100% { box-shadow: 0 12px 50px rgba(255,155,33,0.12); }
+  30% { box-shadow: 0 0 0 4px rgba(255,155,33,0.35), 0 12px 60px rgba(255,155,33,0.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pay--flash .pay__card { animation: none; }
+}
 
 /* Admin registration rows */
 .reg-badge {
@@ -468,6 +481,12 @@ body {
 
 .form__submit { width: 100%; margin-top: 6px; }
 .form__note { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 14px; }
+.form__fee {
+  text-align: center; font-size: 0.86rem; font-weight: 700; color: var(--accent-2);
+  border: 1px solid var(--accent); border-radius: 12px;
+  background: rgba(255,155,33,0.08); padding: 11px 14px; margin-bottom: 16px;
+}
+.form__fee[hidden] { display: none; }
 
 /* ---------- Closed ---------- */
 .closed {

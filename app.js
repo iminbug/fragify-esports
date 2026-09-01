@@ -355,6 +355,16 @@ async function applyPayment(fee) {
   entryFee = fee;
   const section = el("paymentSection");
 
+  // Say the price on the form itself — nobody should find out there's a fee only
+  // after they've filled the whole thing in.
+  const feeNote = el("formFeeNote");
+  if (fee) {
+    feeNote.textContent = `💳 Entry fee ₹${fee.amount} — slot lock karne ke turant baad UPI se bharna hoga.`;
+    feeNote.hidden = false;
+  } else {
+    feeNote.hidden = true;
+  }
+
   if (!fee) {
     section.hidden = true;
     return;
@@ -658,25 +668,55 @@ function showSuccess(teamName, res) {
   }
 
   const payNote = el("modalPayNote");
+  const payBtn = el("modalPayBtn");
   if (res.paymentDue) {
     // The slot is reserved, not confirmed — say so plainly rather than letting the
     // team walk away thinking they're in. Only the trailing text node is swapped so
     // the slot-number span survives.
     el("modalTitle").lastChild.textContent = " reserved";
     payNote.textContent =
-      `⚠️ ₹${res.paymentDue.amount} entry fee ${res.paymentDue.holdMinutes} minute ke andar bharo — niche "Entry Fee" section me Pay ka button hai. Payment ke bina slot chhut jayega.`;
+      `⚠️ ₹${res.paymentDue.amount} entry fee ${res.paymentDue.holdMinutes} minute ke andar bharo, warna slot chala jayega. Payment ke baad UTR submit karna hai.`;
     payNote.hidden = false;
+
+    // The VPA comes back with the registration, so this works even if the fee was
+    // configured after this page was loaded.
+    payBtn.href = upiLink(res.paymentDue, res.teamId);
+    payBtn.textContent = `Pay ₹${res.paymentDue.amount} via UPI`;
+    payBtn.hidden = false;
+    el("modalClose").textContent = "Payment kar liya → UTR daalo";
+    pendingPayment = true;
   } else {
     payNote.hidden = true;
+    payBtn.hidden = true;
+    payBtn.removeAttribute("href");
+    el("modalClose").textContent = "Done";
+    pendingPayment = false;
   }
 
   modal.hidden = false;
   document.body.style.overflow = "hidden";
 }
 
+/* Set while a just-registered team still owes money, so closing the confirmation can
+   drop them straight onto the entry-fee card instead of making them hunt for it. */
+let pendingPayment = false;
+
 function closeModal() {
   modal.hidden = true;
   document.body.style.overflow = "";
+
+  if (!pendingPayment) return;
+  pendingPayment = false;
+
+  const section = el("paymentSection");
+  if (section.hidden) return;
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  // A flash on arrival — the page scrolled on its own, so point at what changed.
+  // No autofocus on the UTR field: the mobile keyboard would open mid-scroll and
+  // land them in the wrong place.
+  section.classList.remove("pay--flash");
+  void section.offsetWidth; // restart the animation if it's still running
+  section.classList.add("pay--flash");
 }
 
 el("modalClose").addEventListener("click", closeModal);
