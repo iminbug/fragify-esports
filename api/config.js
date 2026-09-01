@@ -145,24 +145,24 @@ async function saveUpi(raw) {
 
   const { vpa, extra } = parsePayee(raw.vpa);
   if (!VPA_PATTERN.test(vpa)) {
-    return { error: "UPI ID aisi dikhti hai: yourname@ybl (ya poora QR link paste karo)" };
+    return { error: "A UPI ID looks like yourname@ybl (or paste the full QR link)" };
   }
 
   const amount = Number(raw.amount);
   if (!Number.isInteger(amount) || amount < 1 || amount > MAX_AMOUNT) {
-    return { error: `Entry fee 1 se ${MAX_AMOUNT} ke beech poora rupee hona chahiye` };
+    return { error: `Entry fee must be a whole rupee amount between 1 and ${MAX_AMOUNT}` };
   }
 
   const name = String(raw.name ?? "").trim().replace(/\s+/g, " ") || "Fragify Esports";
   if (name.length > MAX_PAYEE_NAME_LEN) {
-    return { error: `Payee name ${MAX_PAYEE_NAME_LEN} characters se chhota rakho` };
+    return { error: `Payee name must be under ${MAX_PAYEE_NAME_LEN} characters` };
   }
 
   // Optional. UPI apps refuse link-started payments to a personal VPA, so a number
   // teams can pay directly is the fallback that always works.
   const phone = String(raw.phone ?? "").replace(/\D/g, "");
   if (phone && phone.length !== 10) {
-    return { error: "UPI mobile number 10 digit ka hona chahiye" };
+    return { error: "The UPI mobile number must be 10 digits" };
   }
 
   await kv.set("config:upi", { vpa, name, amount, phone: phone || null, extra });

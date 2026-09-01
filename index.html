@@ -112,8 +112,8 @@
         <!-- Locked view: everyone sees this until they prove they registered -->
         <form class="room__gate" id="roomGate">
           <p class="room__gate-text">
-            🔒 Room details sirf registered teams ke liye. Registration ke time jo
-            Team ID aur password mila tha wo daalo.
+            🔒 Room details are for registered teams only. Enter the Team ID and
+            password you received when you registered.
           </p>
           <div class="room__gate-fields">
             <div class="field">
@@ -144,7 +144,7 @@
               <span class="room__value" id="roomPass">—</span>
             </div>
           </div>
-          <p class="room__note">⚡ Screenshot le lo — ye details timer khatam hote hi apne aap hat jayengi.</p>
+          <p class="room__note">⚡ Take a screenshot — these details disappear on their own when the timer runs out.</p>
           <button type="button" class="room__lock" id="roomLockBtn">Lock again</button>
         </div>
       </div>
@@ -162,8 +162,8 @@
         <!-- Locked view: a team's payment status is its own business -->
         <form class="pay__gate" id="payGate">
           <p class="pay__gate-text">
-            Slot tabhi confirm hoga jab entry fee verify ho jayegi. Registration ke
-            time mila Team ID aur password daalo.
+            Your slot is confirmed only after the entry fee is verified. Enter the
+            Team ID and password you received when you registered.
           </p>
           <div class="pay__gate-fields">
             <div class="field">
@@ -187,6 +187,14 @@
           <p class="pay__status" id="payStatus"></p>
           <p class="pay__hold" id="payHold" hidden></p>
 
+          <!-- The community invite is the reward for a settled slot: it only ever
+               appears once the entry fee has been verified, so an unpaid team can't
+               grab the link and vanish. app.js fills the href from /api/payment,
+               which withholds it until then. -->
+          <a href="#" target="_blank" rel="noopener" class="btn btn--whatsapp pay__wa" id="payWaLink" hidden>
+            💬 Join WhatsApp Community
+          </a>
+
           <!-- Everything below is only for a team that still owes money. Three steps,
                in order: scan or copy, pay, then hand back the UTR. Deep links into the
                UPI apps are deliberately gone — they got refused often enough that
@@ -195,14 +203,14 @@
             <!-- Step 1. The QR needs qr.png in the deploy; app.js hides the whole
                  figure if that file isn't there. -->
             <figure class="pay__qr" id="payQrBox" hidden>
-              <figcaption class="pay__step">Step 1 — QR scan karo</figcaption>
+              <figcaption class="pay__step">Step 1 — Scan the QR</figcaption>
               <img class="pay__qr-img" id="payQr" src="qr.png" alt="Entry fee payment QR code" />
               <figcaption class="pay__qr-note">
-                Image dabakar save karo, phir apne UPI app me <strong>"Scan from gallery"</strong> chuno.
+                Press and hold the image to save it, then pick <strong>"Scan from gallery"</strong> in your UPI app.
               </figcaption>
             </figure>
 
-            <p class="pay__step" id="payIdsStep">Ya UPI ID copy karke app me paste karo</p>
+            <p class="pay__step" id="payIdsStep">Or copy the UPI ID and paste it into your app</p>
             <div class="pay__ids">
               <div class="pay__id-row">
                 <span class="pay__id-label">UPI ID</span>
@@ -220,17 +228,17 @@
                 <button type="button" class="pay__copy" data-copy="payAmt">Copy</button>
               </div>
               <div class="pay__id-row">
-                <span class="pay__id-label">Note me likho</span>
+                <span class="pay__id-label">Payment note</span>
                 <span class="pay__id-value" id="payTn">—</span>
                 <button type="button" class="pay__copy" data-copy="payTn">Copy</button>
               </div>
             </div>
 
             <form class="pay__utr" id="utrForm">
-              <p class="pay__step">Step 2 — payment ka UTR yahan daalo</p>
+              <p class="pay__step">Step 2 — Enter the UTR of your payment</p>
               <div class="field">
                 <label for="payUtr">UTR / Transaction ID</label>
-                <input type="text" id="payUtr" placeholder="UPI app me payment ke baad milta hai" autocomplete="off" />
+                <input type="text" id="payUtr" placeholder="Shown in your UPI app after payment" autocomplete="off" />
               </div>
               <p class="form__alert" id="utrAlert" role="alert" hidden></p>
               <button type="submit" class="btn btn--primary" id="utrBtn">
@@ -248,7 +256,7 @@
     <section class="details" id="detailsSection" hidden>
       <div class="details__head">
         <h2>Match Details</h2>
-        <p>Sab kuch jo drop se pehle jaanna zaroori hai.</p>
+        <p>Everything you need to know before the drop.</p>
       </div>
 
       <div class="detail-grid" id="detailGrid"></div>
@@ -268,7 +276,7 @@
     <section class="board" id="boardSection">
       <div class="board__head">
         <h2>Confirmed Teams</h2>
-        <p id="boardSub">Entry fee verify hote hi team ka naam apne slot par aa jata hai.</p>
+        <p id="boardSub">A team's name appears on its slot as soon as the entry fee is verified.</p>
       </div>
       <div class="board__grid" id="boardGrid"></div>
     </section>
@@ -303,7 +311,7 @@
           <legend class="squad__legend">
             Squad Members <span class="squad__optional">Optional</span>
           </legend>
-          <p class="squad__hint">Leader is Player 1. Baaki squad abhi add kar lein, ya baad me community me IGNs share kar dein.</p>
+          <p class="squad__hint">The leader is Player 1. Add the rest of your squad now, or share their IGNs in the community later.</p>
 
           <div class="field">
             <label for="member2">Player 2 (IGN)</label>
@@ -449,7 +457,7 @@
     <div class="modal__backdrop"></div>
     <div class="modal__card modal__card--wide">
       <h2>🎮 Post Room ID &amp; Pass</h2>
-      <p class="modal__sub">Website pe 10 minute dikhega, phir apne aap gayab.</p>
+      <p class="modal__sub">Visible on the website for 10 minutes, then removed automatically.</p>
 
       <form id="roomForm" class="details-form">
         <div class="details-form__grid">
@@ -482,18 +490,19 @@
     <div class="modal__backdrop"></div>
     <div class="modal__card modal__card--wide">
       <h2>💳 Entry Fee &amp; UPI</h2>
-      <p class="modal__sub">Fee set karte hi naye slots payment ke baad confirm honge.</p>
+      <p class="modal__sub">Once a fee is set, new slots are confirmed only after payment.</p>
 
       <form id="upiForm" class="details-form">
         <div class="details-form__grid">
           <div class="field field--full">
-            <label for="uVpa">Your UPI ID <em>ya poora QR link</em></label>
-            <input type="text" id="uVpa" name="vpa" placeholder="9217191222@ybl — ya upi://pay?pa=...&amp;sign=..." autocomplete="off" />
+            <label for="uVpa">Your UPI ID <em>or full QR link</em></label>
+            <input type="text" id="uVpa" name="vpa" placeholder="9217191222@ybl — or upi://pay?pa=...&amp;sign=..." autocomplete="off" />
             <p class="field__help">
-              Merchant QR use kar rahe ho? Sirf UPI ID kaafi nahi — QR ke saath jo
-              <strong>sign</strong> aata hai wo bhi chahiye, warna app "receiver is not accepting
-              payments on this specific UPI ID" bolta hai. Apna QR kisi bhi QR-scanner app se
-              scan karke poora <code>upi://pay?...</code> text yahan paste kar do.
+              Using a merchant QR? The UPI ID alone is not enough — you also need the
+              <strong>sign</strong> that comes with the QR, otherwise the app says
+              "receiver is not accepting payments on this specific UPI ID". Scan your own
+              QR with any QR-scanner app and paste the full <code>upi://pay?...</code>
+              text here.
             </p>
           </div>
           <div class="field">
@@ -505,7 +514,7 @@
             <input type="tel" id="uPhone" name="phone" placeholder="10-digit number" inputmode="numeric" maxlength="10" autocomplete="off" />
           </div>
           <div class="field field--full">
-            <label for="uName">Payee Name (UPI app me dikhega)</label>
+            <label for="uName">Payee Name (shown in the UPI app)</label>
             <input type="text" id="uName" name="name" placeholder="Fragify Esports" autocomplete="off" />
           </div>
         </div>
@@ -518,7 +527,7 @@
       </form>
 
       <button class="admin-btn admin-btn--danger room-form__clear" id="upiClearBtn">
-        Tournament free kar do
+        Make tournament free
       </button>
       <button class="modal__close">Cancel</button>
     </div>
@@ -529,7 +538,7 @@
     <div class="modal__backdrop"></div>
     <div class="modal__card modal__card--wide">
       <h2>🏆 Match Details</h2>
-      <p class="modal__sub">Khaali chhoda hua field website pe dikhega hi nahi.</p>
+      <p class="modal__sub">Any field you leave blank will not appear on the website.</p>
 
       <form id="detailsForm" class="details-form">
         <div class="details-form__grid">
@@ -573,8 +582,8 @@
 
         <div class="field">
           <label for="dRules">⚠️ Mandatory Rules</label>
-          <textarea id="dRules" name="rules" rows="4" placeholder="Ek line me ek rule likho…"></textarea>
-          <small class="details-form__hint">Har nayi line ek alag rule banegi.</small>
+          <textarea id="dRules" name="rules" rows="4" placeholder="One rule per line…"></textarea>
+          <small class="details-form__hint">Each new line becomes a separate rule.</small>
         </div>
 
         <p class="form__alert" id="detailsAlert" role="alert" hidden></p>

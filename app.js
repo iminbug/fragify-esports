@@ -115,8 +115,8 @@ function renderBoard(teams, total) {
 
   const confirmed = teams.filter((t) => t.confirmed).length;
   el("boardSub").textContent = confirmed
-    ? `${confirmed} team${confirmed === 1 ? "" : "s"} confirmed. Entry fee verify hote hi naam yahan aa jata hai.`
-    : "Abhi koi team confirm nahi hui. Entry fee verify hote hi naam yahan aa jayega.";
+    ? `${confirmed} team${confirmed === 1 ? "" : "s"} confirmed. A team's name appears here as soon as its entry fee is verified.`
+    : "No teams confirmed yet. A team's name appears here as soon as its entry fee is verified.";
 }
 
 /* ---------- Render slots ---------- */
@@ -292,7 +292,7 @@ el("roomGate").addEventListener("submit", async (e) => {
   const teamId = el("unlockId").value.trim().toUpperCase();
   const password = el("unlockPass").value.trim().toUpperCase();
   if (!teamId || !password) {
-    return setUnlockAlert("Team ID aur password dono chahiye.");
+    return setUnlockAlert("Enter both your Team ID and password.");
   }
 
   const btn = el("unlockBtn");
@@ -303,7 +303,7 @@ el("roomGate").addEventListener("submit", async (e) => {
     const { room, team } = await API.room(teamId, password);
     saveAuth(teamId, password);
     if (room) showRoomCreds(room, team);
-    else setUnlockAlert("Room abhi post nahi hua. Thodi der me try karo.");
+    else setUnlockAlert("The room hasn't been posted yet. Try again in a little while.");
   } catch (err) {
     setUnlockAlert(err.message);
   } finally {
@@ -364,14 +364,28 @@ function showPayPanel(info) {
   statusEl.classList.remove("is-pending", "is-submitted", "is-verified");
 
   if (status === "verified") {
-    statusEl.textContent = "✅ Payment verified — tumhara slot confirm hai.";
+    statusEl.textContent = "✅ Payment verified — your slot is confirmed.";
     statusEl.classList.add("is-verified");
   } else if (status === "submitted") {
-    statusEl.textContent = `⏳ UTR ${info.utr || ""} mil gaya. Admin verify kar raha hai — slot tab tak surakshit hai.`;
+    statusEl.textContent = `⏳ UTR ${info.utr || ""} received. An admin is verifying it — your slot is safe until then.`;
     statusEl.classList.add("is-submitted");
   } else {
-    statusEl.textContent = "⚠️ Entry fee pending. Payment ke bina slot chala jayega.";
+    statusEl.textContent = "⚠️ Entry fee pending. Without payment your slot will be released.";
     statusEl.classList.add("is-pending");
+  }
+
+  /* The community invite is handed over only once the fee is verified, and the server
+     is what decides that — an unverified team simply gets no link in the response, so
+     there is nothing here to reveal early. */
+  const waBtn = el("payWaLink");
+  const waHref = status === "verified" ? normalizeWaLink(info.waLink) : null;
+  if (waHref) {
+    waBtn.href = waHref;
+    waBtn.hidden = false;
+  } else {
+    // A dead button is worse than none — drop the href along with the button.
+    waBtn.removeAttribute("href");
+    waBtn.hidden = true;
   }
 
   // Only a pending team is on a clock, and only it needs the pay controls.
@@ -382,8 +396,8 @@ function showPayPanel(info) {
   if (due && typeof info.holdSecondsLeft === "number") {
     const mins = Math.ceil(info.holdSecondsLeft / 60);
     holdEl.textContent = mins > 0
-      ? `⏱ Slot ${mins} minute aur reserved hai.`
-      : "⏱ Hold khatam ho chuka hai — jaldi karo, slot kisi aur ko ja sakta hai.";
+      ? `⏱ Your slot is reserved for ${mins} more minute${mins === 1 ? "" : "s"}.`
+      : "⏱ The hold has expired — pay now, the slot could go to another team.";
     holdEl.hidden = false;
   } else {
     holdEl.hidden = true;
@@ -413,13 +427,13 @@ async function applyPayment(fee) {
   // did nothing — the fee is only visible to a logged-in team, never to the admin.
   el("adminUpiBtn").textContent = fee
     ? `💳 Entry Fee: ₹${fee.amount} · ${fee.vpa}`
-    : "💳 Entry Fee: OFF — set karo";
+    : "💳 Entry Fee: OFF — tap to set";
 
   // Say the price on the form itself — nobody should find out there's a fee only
   // after they've filled the whole thing in.
   const feeNote = el("formFeeNote");
   if (fee) {
-    feeNote.textContent = `💳 Entry fee ₹${fee.amount} — slot lock karne ke turant baad UPI se bharna hoga.`;
+    feeNote.textContent = `💳 Entry fee ₹${fee.amount} — pay by UPI right after you lock your slot.`;
     feeNote.hidden = false;
   } else {
     feeNote.hidden = true;
@@ -440,7 +454,7 @@ async function applyPayment(fee) {
   } catch (err) {
     // Credentials that no longer work (slot cancelled, slots reset) shouldn't be
     // retried on every poll.
-    if (/galat|Unauthorized/i.test(err.message)) clearAuth();
+    if (/incorrect|Unauthorized/i.test(err.message)) clearAuth();
     showPayGate(err.message);
   }
 }
@@ -452,7 +466,7 @@ el("payGate").addEventListener("submit", async (e) => {
   const teamId = el("payId").value.trim().toUpperCase();
   const password = el("payPass").value.trim().toUpperCase();
   if (!teamId || !password) {
-    return setPayGateAlert("Team ID aur password dono chahiye.");
+    return setPayGateAlert("Enter both your Team ID and password.");
   }
 
   const btn = el("payGateBtn");
@@ -476,10 +490,10 @@ el("utrForm").addEventListener("submit", async (e) => {
   setUtrAlert("");
 
   const auth = savedAuth();
-  if (!auth) return showPayGate("Session khatam ho gaya — dobara login karo.");
+  if (!auth) return showPayGate("Your session has expired — log in again.");
 
   const utr = el("payUtr").value.trim();
-  if (!utr) return setUtrAlert("UPI app se UTR / transaction ID daalo.");
+  if (!utr) return setUtrAlert("Enter the UTR / transaction ID from your UPI app.");
 
   const btn = el("utrBtn");
   btn.disabled = true;
@@ -523,7 +537,7 @@ el("payDue").addEventListener("click", async (e) => {
     btn.textContent = "Copied ✓";
   } catch {
     // Clipboard access needs HTTPS and a permission — the value is on screen anyway.
-    btn.textContent = "Copy nahi hua";
+    btn.textContent = "Copy failed";
   }
   setTimeout(() => { btn.textContent = "Copy"; }, 1500);
 });
@@ -739,11 +753,13 @@ function showSuccess(teamName, res) {
     el("modalHint").textContent =
       "Save your Team ID & Password. You'll need them in the community for your room details.";
   } else {
-    // No community link configured yet — a dead button is worse than none.
+    // Either no community link is configured yet, or the entry fee is still unpaid
+    // and the server is holding the link back. A dead button is worse than none.
     waBtn.removeAttribute("href");
     waBtn.hidden = true;
-    el("modalHint").textContent =
-      "Save your Team ID & Password — screenshot this. The WhatsApp community link will be shared with you shortly.";
+    el("modalHint").textContent = res.paymentDue
+      ? "Save your Team ID & Password — screenshot this. The WhatsApp community link appears once your entry fee is verified."
+      : "Save your Team ID & Password — screenshot this. The WhatsApp community link will be shared with you shortly.";
   }
 
   const payNote = el("modalPayNote");
@@ -753,9 +769,9 @@ function showSuccess(teamName, res) {
     // the slot-number span survives.
     el("modalTitle").lastChild.textContent = " reserved";
     payNote.textContent =
-      `⚠️ ₹${res.paymentDue.amount} entry fee ${res.paymentDue.holdMinutes} minute ke andar bharo, warna slot chala jayega. Neeche QR aur UPI ID mil jayegi.`;
+      `⚠️ Pay the ₹${res.paymentDue.amount} entry fee within ${res.paymentDue.holdMinutes} minutes or your slot will be released. The QR and UPI ID are below.`;
     payNote.hidden = false;
-    el("modalClose").textContent = "Payment karne chalo →";
+    el("modalClose").textContent = "Go to payment →";
     pendingPayment = true;
   } else {
     payNote.hidden = true;
@@ -887,9 +903,9 @@ el("regList").addEventListener("click", async (e) => {
   const label = "#" + String(slot).padStart(2, "0");
 
   const confirms = {
-    verify: `Slot ${label} ka payment verified mark karein?`,
-    reject: `Slot ${label} ka UTR reject karein? Team ko dobara payment ka mauka milega.`,
-    cancel: `Slot ${label} cancel karein? Team hat jayegi aur slot agle registration ko mil jayega.`,
+    verify: `Mark the payment for slot ${label} as verified?`,
+    reject: `Reject the UTR for slot ${label}? The team will get another chance to pay.`,
+    cancel: `Cancel slot ${label}? The team is removed and the slot goes to the next registration.`,
   };
   if (!confirm(confirms[act])) return;
 
@@ -1047,7 +1063,7 @@ upiForm.addEventListener("submit", async (e) => {
     );
     await loadDetails();
     closeUpiModal();
-    alert("✅ Entry fee live. Naye registrations ab payment ke baad confirm honge.");
+    alert("✅ Entry fee is live. New registrations are confirmed only after payment.");
   } catch (err) {
     setUpiAlert(err.message);
   } finally {
@@ -1057,14 +1073,14 @@ upiForm.addEventListener("submit", async (e) => {
 });
 
 el("upiClearBtn").addEventListener("click", async () => {
-  if (!confirm("Entry fee hata dein? Iske baad sab slots free ho jayenge.")) return;
+  if (!confirm("Remove the entry fee? All slots become free after this.")) return;
 
   try {
     // An explicit null drops the key — that's how the tournament goes back to free.
     await API.setUpi(null, adminKey);
     await loadDetails();
     closeUpiModal();
-    alert("✅ Tournament ab free hai");
+    alert("✅ The tournament is now free");
   } catch (err) {
     setUpiAlert(err.message);
   }

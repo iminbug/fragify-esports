@@ -170,6 +170,14 @@ body {
   background: var(--whatsapp); box-shadow: 0 8px 30px rgba(37,211,102,0.3);
 }
 .btn--whatsapp:hover { transform: translateY(-2px); }
+/* `.btn` sets display:inline-block, and an author rule beats the browser's own
+   [hidden] rule at equal specificity — so a hidden button would still be on screen
+   unless this says otherwise. That matters here: the community link is withheld
+   until an entry fee is verified, and a "hidden" button nobody hid is a leak. */
+.btn[hidden] { display: none; }
+/* The invite sits between the payment status and the pay steps, so it needs room of
+   its own rather than butting up against either. */
+.pay__wa { margin: 16px 0 4px; }
 
 /* ---------- Cards ---------- */
 .cards {

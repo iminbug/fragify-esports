@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       const reference = String(utr).trim().toUpperCase();
       if (!UTR_PATTERN.test(reference)) {
         return res.status(400).json({
-          error: "UTR sirf numbers/letters ka hota hai (aam taur par 12 digit)",
+          error: "A UTR contains only letters and numbers (usually 12 digits)",
         });
       }
       if (registration.payment_status === "verified") {
@@ -53,6 +53,13 @@ export default async function handler(req, res) {
 
     const upi = (await kv.get("config:upi")) || null;
     const deadline = registration.payment_deadline;
+    const status = registration.payment_status || "verified";
+
+    /* The community invite is the payoff for a settled slot, so it is read only once
+       the fee is verified — a pending or submitted team never has it in its response
+       and so has nothing to find in the network tab either. */
+    const waLink =
+      status === "verified" ? (await kv.get("config:whatsapp_link")) || null : null;
 
     return res.status(200).json({
       ok: true,
@@ -61,8 +68,9 @@ export default async function handler(req, res) {
       slot: registration.slot_number,
       // Registrations made before entry fees existed have no status — they were
       // never asked to pay, so treat them as settled.
-      status: registration.payment_status || "verified",
+      status,
       utr: registration.utr || null,
+      waLink,
       holdSecondsLeft:
         typeof deadline === "number"
           ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000))

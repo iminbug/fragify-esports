@@ -224,7 +224,11 @@ export default async function handler(req, res) {
 
       // null when no community link is configured — the UI then tells the team the
       // link is coming rather than rendering a button that goes nowhere.
-      const waLink = (await kv.get("config:whatsapp_link")) || null;
+      //
+      // A team that still owes the entry fee gets nothing here at all: the invite is
+      // the one thing an unpaid squad could take and walk away with, so it is held
+      // back until an admin verifies the payment and /api/payment hands it over.
+      const waLink = entryFee ? null : (await kv.get("config:whatsapp_link")) || null;
 
       return res.status(200).json({
         ok: true,

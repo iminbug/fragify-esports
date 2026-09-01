@@ -30,8 +30,8 @@ export default async function handler(req, res) {
     if (status !== "verified") {
       return res.status(402).json({
         error: status === "submitted"
-          ? "Payment verify hone ka wait karo — admin check kar raha hai"
-          : "Pehle entry fee bharo, phir room details milenge",
+          ? "Wait for your payment to be verified — an admin is checking it"
+          : "Pay the entry fee first, then the room details will open up",
         paymentStatus: status,
       });
     }
