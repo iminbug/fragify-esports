@@ -30,6 +30,9 @@ const API = {
   config: () => apiGet("/api/config"),
   register: (data) => apiPost("/api/register", data),
   room: (teamId, password) => apiPost("/api/room", { teamId, password }),
+  /* No UTR = "what's my status?"; a UTR = "here's my payment reference". */
+  payment: (teamId, password, utr) =>
+    apiPost("/api/payment", { teamId, password, utr }),
   updateLink: (whatsappLink, adminKey) =>
     apiPost("/api/config", { whatsappLink, adminKey }),
   setRegistrationOpen: (registrationOpen, adminKey) =>
@@ -38,10 +41,18 @@ const API = {
     apiPost("/api/config", { tournament, adminKey }),
   postRoom: (room, adminKey) =>
     apiPost("/api/config", { room, adminKey }),
+  setUpi: (upi, adminKey) =>
+    apiPost("/api/config", { upi, adminKey }),
   listRegistrations: (adminKey) =>
     apiPost("/api/admin", { action: "list", adminKey }),
   resetSlots: (adminKey) =>
     apiPost("/api/admin", { action: "reset", adminKey }),
+  verifyPayment: (slot, adminKey) =>
+    apiPost("/api/admin", { action: "verify", slot, adminKey }),
+  rejectPayment: (slot, adminKey) =>
+    apiPost("/api/admin", { action: "reject", slot, adminKey }),
+  cancelRegistration: (slot, adminKey) =>
+    apiPost("/api/admin", { action: "cancel", slot, adminKey }),
 };
 
 /* ---------- DOM refs ---------- */
@@ -256,6 +267,185 @@ el("roomLockBtn").addEventListener("click", () => {
   showRoomGate();
 });
 
+/* ---------- Entry fee ---------- */
+/* The whole section only exists when an admin has configured a fee. A team unlocks it
+   with the same Team ID + password as the room card, so a squad that just registered is
+   already unlocked and lands straight on the Pay button. */
+let entryFee = null;
+
+function setPayGateAlert(msg) {
+  const alert = el("payGateAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
+
+function setUtrAlert(msg) {
+  const alert = el("utrAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
+
+/* UPI deep link. Built with encodeURIComponent rather than URLSearchParams because the
+   latter encodes spaces as "+", and UPI apps show that literally in the payee name. */
+function upiLink(fee, teamId) {
+  const q = [
+    "pa=" + encodeURIComponent(fee.vpa),
+    "pn=" + encodeURIComponent(fee.name || "Fragify Esports"),
+    "am=" + encodeURIComponent(fee.amount),
+    "cu=INR",
+    "tn=" + encodeURIComponent("Fragify entry " + teamId),
+  ];
+  return "upi://pay?" + q.join("&");
+}
+
+function showPayGate(message) {
+  setPayGateAlert(message || "");
+  setUtrAlert("");
+  el("payPanel").hidden = true;
+  el("payGate").hidden = false;
+}
+
+/* `info` is the /api/payment response. */
+function showPayPanel(info) {
+  const status = info.status || "verified";
+  el("payTeam").textContent = info.team ? `${info.team} · ${info.teamId}` : "";
+
+  const statusEl = el("payStatus");
+  statusEl.classList.remove("is-pending", "is-submitted", "is-verified");
+
+  if (status === "verified") {
+    statusEl.textContent = "✅ Payment verified — tumhara slot confirm hai.";
+    statusEl.classList.add("is-verified");
+  } else if (status === "submitted") {
+    statusEl.textContent = `⏳ UTR ${info.utr || ""} mil gaya. Admin verify kar raha hai — slot tab tak surakshit hai.`;
+    statusEl.classList.add("is-submitted");
+  } else {
+    statusEl.textContent = "⚠️ Entry fee pending. Payment ke bina slot chala jayega.";
+    statusEl.classList.add("is-pending");
+  }
+
+  // Only a pending team is on a clock, and only it needs the pay controls.
+  const due = status === "pending";
+  el("payDue").hidden = !due;
+
+  const holdEl = el("payHold");
+  if (due && typeof info.holdSecondsLeft === "number") {
+    const mins = Math.ceil(info.holdSecondsLeft / 60);
+    holdEl.textContent = mins > 0
+      ? `⏱ Slot ${mins} minute aur reserved hai.`
+      : "⏱ Hold khatam ho chuka hai — jaldi karo, slot kisi aur ko ja sakta hai.";
+    holdEl.hidden = false;
+  } else {
+    holdEl.hidden = true;
+  }
+
+  const fee = info.entryFee || entryFee;
+  if (due && fee) {
+    el("payNowBtn").href = upiLink(fee, info.teamId);
+    el("payNowBtn").textContent = `Pay ₹${fee.amount} via UPI`;
+    el("payVpa").textContent = fee.vpa;
+  }
+
+  el("payGate").hidden = true;
+  el("payPanel").hidden = false;
+}
+
+/* Called on every slots poll. `fee` is null for a free tournament. */
+async function applyPayment(fee) {
+  entryFee = fee;
+  const section = el("paymentSection");
+
+  if (!fee) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+  el("payAmount").textContent = "₹" + fee.amount;
+
+  const auth = savedAuth();
+  if (!auth) return showPayGate();
+
+  try {
+    showPayPanel(await API.payment(auth.teamId, auth.password));
+  } catch (err) {
+    // Credentials that no longer work (slot cancelled, slots reset) shouldn't be
+    // retried on every poll.
+    if (/galat|Unauthorized/i.test(err.message)) clearAuth();
+    showPayGate(err.message);
+  }
+}
+
+el("payGate").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setPayGateAlert("");
+
+  const teamId = el("payId").value.trim().toUpperCase();
+  const password = el("payPass").value.trim().toUpperCase();
+  if (!teamId || !password) {
+    return setPayGateAlert("Team ID aur password dono chahiye.");
+  }
+
+  const btn = el("payGateBtn");
+  btn.disabled = true;
+  btn.textContent = "Checking…";
+
+  try {
+    const info = await API.payment(teamId, password);
+    saveAuth(teamId, password);
+    showPayPanel(info);
+  } catch (err) {
+    setPayGateAlert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Check My Payment Status";
+  }
+});
+
+el("utrForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setUtrAlert("");
+
+  const auth = savedAuth();
+  if (!auth) return showPayGate("Session khatam ho gaya — dobara login karo.");
+
+  const utr = el("payUtr").value.trim();
+  if (!utr) return setUtrAlert("UPI app se UTR / transaction ID daalo.");
+
+  const btn = el("utrBtn");
+  btn.disabled = true;
+  btn.textContent = "Submitting…";
+
+  try {
+    const info = await API.payment(auth.teamId, auth.password, utr);
+    el("payUtr").value = "";
+    showPayPanel(info);
+  } catch (err) {
+    setUtrAlert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Submit Payment Reference";
+  }
+});
+
+el("payCopyBtn").addEventListener("click", async () => {
+  const btn = el("payCopyBtn");
+  try {
+    await navigator.clipboard.writeText(el("payVpa").textContent);
+    btn.textContent = "Copied ✓";
+  } catch {
+    // Clipboard access needs HTTPS and a permission — the ID is on screen anyway.
+    btn.textContent = "Copy nahi hua";
+  }
+  setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+});
+
+el("payLockBtn").addEventListener("click", () => {
+  clearAuth();
+  el("payId").value = "";
+  el("payPass").value = "";
+  showPayGate();
+});
+
 /* ---------- Match details ---------- */
 /* Field order here drives both the public tiles and the admin form. */
 const DETAIL_TILES = [
@@ -315,14 +505,17 @@ function renderDetails() {
 }
 
 async function loadDetails() {
+  let upi = null;
   try {
-    const { tournament: t } = await API.config();
-    tournament = t && typeof t === "object" ? t : {};
+    const cfg = await API.config();
+    tournament = cfg.tournament && typeof cfg.tournament === "object" ? cfg.tournament : {};
+    upi = cfg.upi || null;
   } catch (err) {
     console.error("Details fetch failed:", err);
     tournament = {};
   }
   renderDetails();
+  await applyPayment(upi);
 }
 
 /* ---------- Validation ---------- */
@@ -415,6 +608,9 @@ form.addEventListener("submit", async (e) => {
     showServerError(err.message);
   } finally {
     await renderSlots();
+    // The team is now logged in, so refresh the entry-fee panel — it should be
+    // unlocked and showing their Pay button by the time they close the modal.
+    await loadDetails();
     submitBtn.disabled = false;
     submitBtn.textContent = "Lock My Slot →";
   }
@@ -461,6 +657,19 @@ function showSuccess(teamName, res) {
       "Save your Team ID & Password — screenshot this. The WhatsApp community link will be shared with you shortly.";
   }
 
+  const payNote = el("modalPayNote");
+  if (res.paymentDue) {
+    // The slot is reserved, not confirmed — say so plainly rather than letting the
+    // team walk away thinking they're in. Only the trailing text node is swapped so
+    // the slot-number span survives.
+    el("modalTitle").lastChild.textContent = " reserved";
+    payNote.textContent =
+      `⚠️ ₹${res.paymentDue.amount} entry fee ${res.paymentDue.holdMinutes} minute ke andar bharo — niche "Entry Fee" section me Pay ka button hai. Payment ke bina slot chhut jayega.`;
+    payNote.hidden = false;
+  } else {
+    payNote.hidden = true;
+  }
+
   modal.hidden = false;
   document.body.style.overflow = "hidden";
 }
@@ -497,32 +706,93 @@ el("adminBackdrop").addEventListener("click", () => {
   el("adminPanel").hidden = true;
 });
 
-el("adminViewBtn").addEventListener("click", async () => {
-  const regModal = el("regModal");
+/* ---------- Admin: registrations ---------- */
+/* Registrations from before entry fees existed carry no status; they were never asked
+   to pay, so show them as settled. */
+const PAY_BADGES = {
+  pending: { label: "UNPAID", cls: "is-pending" },
+  submitted: { label: "UTR SUBMITTED", cls: "is-submitted" },
+  verified: { label: "PAID", cls: "is-verified" },
+};
+
+function registrationRow(r) {
+  const members = Array.isArray(r.members) ? r.members : [];
+  const squad = members.length
+    ? `Squad: ${members.map(escapeHtml).join(", ")}<br/>`
+    : "";
+  const status = r.payment_status || "verified";
+  const badge = PAY_BADGES[status] || PAY_BADGES.verified;
+  const utr = r.utr ? `UTR: <strong>${escapeHtml(r.utr)}</strong><br/>` : "";
+
+  // A team that has paid needs no verify button; one that hasn't can't be rejected.
+  const actions = [
+    status !== "verified"
+      ? `<button class="reg-act reg-act--ok" data-act="verify" data-slot="${r.slot_number}">✅ Verify</button>`
+      : "",
+    status === "submitted"
+      ? `<button class="reg-act" data-act="reject" data-slot="${r.slot_number}">↩️ Reject UTR</button>`
+      : "",
+    `<button class="reg-act reg-act--danger" data-act="cancel" data-slot="${r.slot_number}">🗑️ Cancel Slot</button>`,
+  ].join("");
+
+  return `
+  <div style="border-bottom:1px solid var(--border);padding:12px 0">
+    <strong style="color:var(--accent)">Slot #${String(r.slot_number).padStart(2, "0")}</strong>
+    <span class="reg-badge ${badge.cls}">${badge.label}</span><br/>
+    Team: ${escapeHtml(r.team_name)}<br/>
+    Leader: ${escapeHtml(r.leader_name)}<br/>
+    ${squad}Phone: ${escapeHtml(r.phone)}<br/>
+    ${utr}ID: ${escapeHtml(r.team_id)} · Pass: ${escapeHtml(r.password)}
+    <div class="reg-acts">${actions}</div>
+  </div>`;
+}
+
+async function renderRegistrations() {
   const regList = el("regList");
   regList.innerHTML = "<p style='text-align:center;color:var(--muted)'>Loading…</p>";
-  regModal.hidden = false;
 
   try {
     const { registrations } = await API.listRegistrations(adminKey);
     regList.innerHTML = registrations.length
-      ? registrations.map((r) => {
-          const members = Array.isArray(r.members) ? r.members : [];
-          const squad = members.length
-            ? `Squad: ${members.map(escapeHtml).join(", ")}<br/>`
-            : "";
-          return `
-          <div style="border-bottom:1px solid var(--border);padding:12px 0">
-            <strong style="color:var(--accent)">Slot #${String(r.slot_number).padStart(2, "0")}</strong><br/>
-            Team: ${escapeHtml(r.team_name)}<br/>
-            Leader: ${escapeHtml(r.leader_name)}<br/>
-            ${squad}Phone: ${escapeHtml(r.phone)}<br/>
-            ID: ${escapeHtml(r.team_id)} · Pass: ${escapeHtml(r.password)}
-          </div>`;
-        }).join("")
+      ? registrations.map(registrationRow).join("")
       : "<p style='text-align:center;color:var(--muted)'>No registrations yet</p>";
   } catch (err) {
     regList.innerHTML = `<p style="text-align:center;color:var(--danger)">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+el("adminViewBtn").addEventListener("click", async () => {
+  el("regModal").hidden = false;
+  await renderRegistrations();
+});
+
+/* Delegated: the rows are rebuilt after every action, so per-button listeners would
+   be re-bound each time. */
+el("regList").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".reg-act");
+  if (!btn) return;
+
+  const act = btn.dataset.act;
+  const slot = Number(btn.dataset.slot);
+  const label = "#" + String(slot).padStart(2, "0");
+
+  const confirms = {
+    verify: `Slot ${label} ka payment verified mark karein?`,
+    reject: `Slot ${label} ka UTR reject karein? Team ko dobara payment ka mauka milega.`,
+    cancel: `Slot ${label} cancel karein? Team hat jayegi aur slot agle registration ko mil jayega.`,
+  };
+  if (!confirm(confirms[act])) return;
+
+  btn.disabled = true;
+  try {
+    if (act === "verify") await API.verifyPayment(slot, adminKey);
+    else if (act === "reject") await API.rejectPayment(slot, adminKey);
+    else await API.cancelRegistration(slot, adminKey);
+    await renderRegistrations();
+    await renderSlots();
+  } catch (err) {
+    alert("❌ " + err.message);
+    btn.disabled = false;
   }
 });
 
@@ -615,6 +885,74 @@ el("roomClearBtn").addEventListener("click", async () => {
     alert("✅ Room details removed");
   } catch (err) {
     setRoomAlert(err.message);
+  }
+});
+
+/* ---------- Admin: entry fee ---------- */
+const upiModal = el("upiModal");
+const upiForm = el("upiForm");
+
+function setUpiAlert(msg) {
+  const alert = el("upiAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
+
+function closeUpiModal() {
+  upiModal.hidden = true;
+}
+
+el("adminUpiBtn").addEventListener("click", () => {
+  setUpiAlert("");
+  // Prefill from what's live so a small edit doesn't mean retyping the UPI ID.
+  el("uVpa").value = entryFee?.vpa || "";
+  el("uName").value = entryFee?.name || "";
+  el("uAmount").value = entryFee?.amount || "";
+  upiModal.hidden = false;
+});
+
+upiModal.querySelector(".modal__close").addEventListener("click", closeUpiModal);
+upiModal.querySelector(".modal__backdrop").addEventListener("click", closeUpiModal);
+
+upiForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setUpiAlert("");
+
+  const saveBtn = el("upiSaveBtn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving…";
+
+  try {
+    await API.setUpi(
+      {
+        vpa: el("uVpa").value.trim(),
+        name: el("uName").value.trim(),
+        amount: Number(el("uAmount").value.trim()),
+      },
+      adminKey
+    );
+    await loadDetails();
+    closeUpiModal();
+    alert("✅ Entry fee live. Naye registrations ab payment ke baad confirm honge.");
+  } catch (err) {
+    setUpiAlert(err.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save Entry Fee";
+  }
+});
+
+el("upiClearBtn").addEventListener("click", async () => {
+  if (!confirm("Entry fee hata dein? Iske baad sab slots free ho jayenge.")) return;
+
+  try {
+    // An explicit null drops the key — that's how the tournament goes back to free.
+    await API.setUpi(null, adminKey);
+    await loadDetails();
+    closeUpiModal();
+    alert("✅ Tournament ab free hai");
+  } catch (err) {
+    setUpiAlert(err.message);
   }
 });
 
@@ -715,3 +1053,6 @@ el("year").textContent = new Date().getFullYear();
 renderSlots();
 loadDetails();
 setInterval(renderSlots, 10000); // keep the counter fresh
+// Slower than the slot poll: this also re-checks the team's payment status, and an
+// admin verifying a payment isn't something that needs second-by-second freshness.
+setInterval(loadDetails, 30000);

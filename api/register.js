@@ -8,6 +8,9 @@ const MAX_MEMBERS = 4;
    slot of 6 the lobby fills #06 through #21. */
 const FIRST_SLOT = 6;
 
+/* How long an unpaid team keeps its seat before the slot goes back into the pool. */
+const HOLD_MINUTES = 20;
+
 function genPassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let p = "";
@@ -43,9 +46,55 @@ function cleanMembers(raw) {
   return { members };
 }
 
+/* A team that hasn't paid holds its seat for HOLD_MINUTES and then loses it. A team
+   that has submitted a UTR is waiting on *us*, not the other way round, so it never
+   expires — only an admin clears it. */
+function isExpiredHold(r) {
+  return (
+    r?.payment_status === "pending" &&
+    typeof r.payment_deadline === "number" &&
+    r.payment_deadline < Date.now()
+  );
+}
+
+/* The live roster, with lapsed holds swept out. There is no cron here, so expiry
+   happens lazily on read — and only writes back when something actually changed. */
+async function activeRegistrations() {
+  const list = await kv.get("registrations:list");
+  if (!Array.isArray(list)) return [];
+
+  const live = list.filter((r) => !isExpiredHold(r));
+  if (live.length === list.length) return list;
+
+  await kv.set("registrations:list", live);
+  for (const dropped of list.filter(isExpiredHold)) {
+    await kv.del(`registrations:${dropped.slot_number}`);
+    if (dropped.phone) await kv.del(`registrations:phone:${dropped.phone}`);
+  }
+  return live;
+}
+
+/* Seats are handed out by filling the lowest free number, never by counting rows.
+   Counting would give a cancelled team's number to the next registration, and two
+   teams would end up sharing a slot and a Team ID. */
+function nextFreeSlot(list) {
+  const taken = new Set(list.map((r) => Number(r.slot_number)));
+  for (let slot = FIRST_SLOT; slot < FIRST_SLOT + TOTAL_SLOTS; slot++) {
+    if (!taken.has(slot)) return slot;
+  }
+  return null;
+}
+
+/* Entry fee, if an admin has configured one. No config at all means a free
+   tournament, and registrations are confirmed on the spot. */
+async function getEntryFee() {
+  const upi = await kv.get("config:upi");
+  if (!upi || !upi.vpa || !(upi.amount > 0)) return null;
+  return upi;
+}
+
 async function countTaken() {
-  const regList = await kv.get("registrations:list");
-  return Array.isArray(regList) ? regList.length : 0;
+  return (await activeRegistrations()).length;
 }
 
 /* Admins can close registration early from the panel. The key is absent until the
@@ -117,19 +166,22 @@ export default async function handler(req, res) {
 
       // Duplicate team name check. The list is capped at TOTAL_SLOTS entries, so
       // comparing in JS is cheap.
-      const regList = (await kv.get("registrations:list")) || [];
+      const regList = await activeRegistrations();
       const normalizedTeamName = normalizeTeamName(teamName);
       if (regList.some((r) => normalizeTeamName(r.team_name) === normalizedTeamName)) {
         return res.status(409).json({ error: "This team name is already registered" });
       }
 
-      if (regList.length >= TOTAL_SLOTS) {
+      const slot = nextFreeSlot(regList);
+      if (slot === null) {
         return res.status(409).json({ error: "Registration is full" });
       }
 
-      const slot = FIRST_SLOT + regList.length;
       const teamId = "FRG-" + String(slot).padStart(3, "0");
       const password = genPassword();
+
+      // A configured entry fee puts the team on a hold until the money is verified.
+      const entryFee = await getEntryFee();
 
       const registration = {
         slot_number: slot,
@@ -140,6 +192,9 @@ export default async function handler(req, res) {
         team_id: teamId,
         password: password,
         created_at: new Date().toISOString(),
+        payment_status: entryFee ? "pending" : "verified",
+        payment_deadline: entryFee ? Date.now() + HOLD_MINUTES * 60 * 1000 : null,
+        utr: null,
       };
 
       regList.push(registration);
@@ -157,6 +212,9 @@ export default async function handler(req, res) {
         teamId: teamId,
         password: password,
         waLink: waLink,
+        // Present only for a paid tournament — the UI then sends the team to the
+        // entry-fee section instead of declaring the slot confirmed.
+        paymentDue: entryFee ? { amount: entryFee.amount, holdMinutes: HOLD_MINUTES } : null,
       });
     } catch (err) {
       return res.status(500).json({ error: err.message });

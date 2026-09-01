@@ -85,6 +85,49 @@ async function saveRoom(raw) {
   return {};
 }
 
+/* Entry fee. No config at all means a free tournament, which is why an explicit null
+   has to be accepted — that is how an admin turns payments back off. */
+const VPA_PATTERN = /^[\w.\-]{2,64}@[A-Za-z]{2,32}$/;
+const MAX_PAYEE_NAME_LEN = 40;
+const MAX_AMOUNT = 10000;
+
+async function saveUpi(raw) {
+  if (raw === null) {
+    await kv.del("config:upi");
+    return {};
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return { error: "Entry fee settings must be an object" };
+  }
+
+  const vpa = String(raw.vpa ?? "").trim();
+  if (!VPA_PATTERN.test(vpa)) {
+    return { error: "UPI ID aisi dikhti hai: yourname@ybl" };
+  }
+
+  const amount = Number(raw.amount);
+  if (!Number.isInteger(amount) || amount < 1 || amount > MAX_AMOUNT) {
+    return { error: `Entry fee 1 se ${MAX_AMOUNT} ke beech poora rupee hona chahiye` };
+  }
+
+  const name = String(raw.name ?? "").trim().replace(/\s+/g, " ") || "Fragify Esports";
+  if (name.length > MAX_PAYEE_NAME_LEN) {
+    return { error: `Payee name ${MAX_PAYEE_NAME_LEN} characters se chhota rakho` };
+  }
+
+  await kv.set("config:upi", { vpa, name, amount });
+  return {};
+}
+
+/* The public shape of the entry fee. Same object the admin saved, but read through a
+   guard so a half-written config can't put the site into a paid state. */
+async function publicUpi() {
+  const upi = await kv.get("config:upi");
+  return upi?.vpa && upi.amount > 0
+    ? { vpa: upi.vpa, name: upi.name, amount: upi.amount }
+    : null;
+}
+
 /* Stored links must be absolute — a scheme-less value would be treated as a relative
    URL by the browser and send the team to a page on this site instead. */
 function normalizeLink(raw) {
@@ -113,6 +156,7 @@ export default async function handler(req, res) {
         whatsappLink: whatsappLink || "https://chat.whatsapp.com/",
         registrationOpen: await isRegistrationOpen(),
         tournament: (await kv.get("config:tournament")) || {},
+        upi: await publicUpi(),
       });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -120,7 +164,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { whatsappLink, registrationOpen, tournament, room, adminKey } = req.body || {};
+    const { whatsappLink, registrationOpen, tournament, room, upi, adminKey } = req.body || {};
 
     if (!process.env.ADMIN_KEY) {
       return res.status(500).json({ error: "Admin key is not configured on the server" });
@@ -150,10 +194,15 @@ export default async function handler(req, res) {
         const { error } = await saveRoom(room);
         if (error) return res.status(400).json({ error });
       }
+      if (upi !== undefined) {
+        const { error } = await saveUpi(upi);
+        if (error) return res.status(400).json({ error });
+      }
       return res.status(200).json({
         ok: true,
         registrationOpen: await isRegistrationOpen(),
         tournament: (await kv.get("config:tournament")) || {},
+        upi: await publicUpi(),
       });
     } catch (err) {
       return res.status(500).json({ error: err.message });
