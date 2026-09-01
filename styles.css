@@ -300,16 +300,43 @@ body {
 /* The generic upi:// link is the fallback, so it reads as the quieter option. */
 #payAny, #modalAny { background: var(--bg-soft); color: var(--fg); border: 1px solid var(--border); }
 #payAny:hover, #modalAny:hover { border-color: var(--accent); background: var(--bg-soft); }
-.pay__warn { text-align: center; color: var(--danger); font-size: 0.8rem; margin-top: 10px; }
-.pay__vpa {
-  color: var(--muted); font-size: 0.86rem; margin-top: 12px;
-  display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+/* Every UPI app shows an NPCI notice over the Pay button for link-started payments.
+   Teams read it as an error, so name it before they meet it. */
+.pay__tips {
+  list-style: none; margin-top: 12px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--bg-soft);
 }
-.pay__vpa-value { color: var(--fg); font-weight: 700; word-break: break-all; }
+.pay__tips li { color: var(--muted); font-size: 0.8rem; line-height: 1.55; }
+.pay__tips li + li { margin-top: 8px; }
+.pay__tips strong { color: var(--accent-2); }
+.modal__tip {
+  color: var(--muted); font-size: 0.78rem; line-height: 1.5;
+  text-align: center; margin-top: 12px;
+}
+.modal__tip strong { color: var(--accent-2); }
+.modal__tip[hidden] { display: none; }
+/* The manual route leads, because a hand-typed VPA is the one payment path no app
+   ever refuses. */
+.pay__manual-label { color: var(--muted); font-size: 0.85rem; margin: 4px 0 12px; }
+.pay__manual-label strong { color: var(--accent-2); }
+.pay__ids {
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-soft); overflow: hidden;
+}
+.pay__id-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+}
+.pay__id-row + .pay__id-row { border-top: 1px solid var(--border); }
+.pay__id-row[hidden] { display: none; }
+.pay__id-label { color: var(--muted); font-size: 0.78rem; flex: 0 0 96px; }
+.pay__id-value {
+  color: var(--fg); font-weight: 700; font-size: 0.92rem;
+  flex: 1 1 auto; word-break: break-all;
+}
 .pay__copy {
   background: none; border: 1px solid var(--border); border-radius: 8px;
   color: var(--muted); font-family: inherit; font-size: 0.78rem;
-  padding: 3px 10px; cursor: pointer;
+  padding: 3px 10px; cursor: pointer; flex: 0 0 auto;
 }
 .pay__copy:hover { color: var(--accent); border-color: var(--accent); }
 .pay__utr { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 18px; }
@@ -356,6 +383,16 @@ body {
 
 /* Full-width field inside the two-column admin form grid */
 .field--full { grid-column: 1 / -1; }
+/* Admin-only guidance under an input — long enough to explain a UPI failure mode. */
+.field__help {
+  color: var(--muted); font-size: 0.75rem; line-height: 1.5; margin-top: 6px;
+}
+.field__help strong { color: var(--accent-2); }
+.field__help code {
+  font-family: inherit; color: var(--fg);
+  background: var(--bg-soft); border-radius: 4px; padding: 0 4px;
+}
+.field label em { color: var(--muted); font-style: normal; font-weight: 400; }
 
 /* ---------- Match details ---------- */
 .details {
@@ -431,6 +468,40 @@ body {
 .details-form__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 14px; }
 .details-form__hint { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 6px; }
 .details-form__submit { width: 100%; margin-top: 8px; }
+
+/* ---------- Teamboard ---------- */
+/* The public roster. Sixteen seats are always drawn, so an empty board still reads
+   as "this is the match", and a filling one shows exactly how much room is left. */
+.board { max-width: 900px; margin: 60px auto; padding: 0 24px; }
+.board__head { text-align: center; margin-bottom: 28px; }
+.board__head h2 {
+  font-family: "Orbitron", sans-serif; font-size: clamp(1.4rem, 4vw, 2rem);
+}
+.board__head p { color: var(--muted); margin-top: 6px; font-size: 0.9rem; }
+
+.board__grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px;
+}
+.board__slot {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 14px; min-width: 0;
+}
+.board__num {
+  font-family: "Orbitron", sans-serif; font-size: 0.8rem; font-weight: 700;
+  color: var(--muted); flex: 0 0 auto;
+}
+.board__name {
+  color: var(--muted); font-size: 0.92rem; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.board__slot.is-taken {
+  border-color: var(--accent); background: rgba(255,155,33,0.07);
+}
+.board__slot.is-taken .board__num { color: var(--accent); }
+.board__slot.is-taken .board__name { color: var(--fg); font-weight: 700; }
+.board__slot.is-holding { border-style: dashed; }
+.board__slot.is-holding .board__name { color: var(--accent-2); font-style: italic; }
 
 /* ---------- Register ---------- */
 .register {
@@ -616,6 +687,8 @@ body {
 /* ---------- Responsive ---------- */
 @media (max-width: 760px) {
   .cards { grid-template-columns: 1fr; }
+  /* One seat per row on a phone — two columns would clip most team names. */
+  .board__grid { grid-template-columns: 1fr; }
   .socials { grid-template-columns: 1fr; }
   .detail-grid { grid-template-columns: 1fr; }
   .room__creds { grid-template-columns: 1fr; }

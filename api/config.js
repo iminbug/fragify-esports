@@ -91,6 +91,49 @@ const VPA_PATTERN = /^[\w.\-]{2,64}@[A-Za-z]{2,32}$/;
 const MAX_PAYEE_NAME_LEN = 40;
 const MAX_AMOUNT = 10000;
 
+/* A merchant QR carries a signature alongside the VPA. Send only `pa` and the paying
+   app rejects the intent — "the receiver is not accepting payments on this specific
+   UPI ID" — even though that same VPA works fine when typed by hand. So an admin may
+   paste the whole scanned QR string and these parameters ride along untouched.
+
+   Deliberately an allow-list: `tr`/`tid` would pin every team to one transaction id,
+   and `am`/`tn` are ours to set per team. */
+const QR_PASSTHROUGH = ["mc", "mode", "orgid", "sign", "purpose"];
+const MAX_PARAM_LEN = 512;
+const PARAM_PATTERN = /^[A-Za-z0-9+/=_.:\-]+$/;
+
+/* Accepts either a bare `name@bank` or a full `upi://pay?pa=...&sign=...` string, and
+   returns the VPA plus whatever signed parameters came with it.
+
+   Split by hand rather than with URLSearchParams: a QR's signature is base64, and
+   URLSearchParams applies form decoding, which turns every literal "+" in it into a
+   space — a silently corrupted signature the paying app would then reject. */
+function parsePayee(input) {
+  const value = String(input ?? "").trim();
+  if (!value.includes("?")) return { vpa: value, extra: {} };
+
+  const fields = new Map();
+  for (const pair of value.slice(value.indexOf("?") + 1).split("&")) {
+    const eq = pair.indexOf("=");
+    if (eq < 1) continue;
+    const key = pair.slice(0, eq).trim().toLowerCase();
+    if (fields.has(key)) continue;
+    try {
+      fields.set(key, decodeURIComponent(pair.slice(eq + 1)).trim());
+    } catch {
+      fields.set(key, pair.slice(eq + 1).trim());
+    }
+  }
+
+  const extra = {};
+  for (const key of QR_PASSTHROUGH) {
+    const param = fields.get(key) || "";
+    if (!param || param.length > MAX_PARAM_LEN || !PARAM_PATTERN.test(param)) continue;
+    extra[key] = param;
+  }
+  return { vpa: fields.get("pa") || "", extra };
+}
+
 async function saveUpi(raw) {
   if (raw === null) {
     await kv.del("config:upi");
@@ -100,9 +143,9 @@ async function saveUpi(raw) {
     return { error: "Entry fee settings must be an object" };
   }
 
-  const vpa = String(raw.vpa ?? "").trim();
+  const { vpa, extra } = parsePayee(raw.vpa);
   if (!VPA_PATTERN.test(vpa)) {
-    return { error: "UPI ID aisi dikhti hai: yourname@ybl" };
+    return { error: "UPI ID aisi dikhti hai: yourname@ybl (ya poora QR link paste karo)" };
   }
 
   const amount = Number(raw.amount);
@@ -115,7 +158,14 @@ async function saveUpi(raw) {
     return { error: `Payee name ${MAX_PAYEE_NAME_LEN} characters se chhota rakho` };
   }
 
-  await kv.set("config:upi", { vpa, name, amount });
+  // Optional. UPI apps refuse link-started payments to a personal VPA, so a number
+  // teams can pay directly is the fallback that always works.
+  const phone = String(raw.phone ?? "").replace(/\D/g, "");
+  if (phone && phone.length !== 10) {
+    return { error: "UPI mobile number 10 digit ka hona chahiye" };
+  }
+
+  await kv.set("config:upi", { vpa, name, amount, phone: phone || null, extra });
   return {};
 }
 
@@ -124,7 +174,13 @@ async function saveUpi(raw) {
 async function publicUpi() {
   const upi = await kv.get("config:upi");
   return upi?.vpa && upi.amount > 0
-    ? { vpa: upi.vpa, name: upi.name, amount: upi.amount }
+    ? {
+        vpa: upi.vpa,
+        name: upi.name,
+        amount: upi.amount,
+        phone: upi.phone || null,
+        extra: upi.extra || {},
+      }
     : null;
 }
 

@@ -68,14 +68,65 @@ const submitBtn = el("submitBtn");
 const heroCta = el("heroCta");
 const modal = el("successModal");
 
+/* ---------- Teamboard ---------- */
+/* Every seat is drawn, taken or not, so the board reads as the match roster rather
+   than a list that quietly grows. Slot numbers start at #06 — the first five belong
+   to the hosts, not to registration. */
+const FIRST_SLOT = 6;
+
+function renderBoard(teams, total) {
+  // An older deploy has no `teams` in its response; leave the last good board up
+  // rather than blanking the section on a stale backend.
+  if (!Array.isArray(teams)) return;
+
+  const bySlot = new Map(teams.map((t) => [Number(t.slot), t]));
+  const seats = Number(total) > 0 ? Number(total) : 16;
+  const grid = el("boardGrid");
+  grid.textContent = "";
+
+  for (let i = 0; i < seats; i++) {
+    const slot = FIRST_SLOT + i;
+    const team = bySlot.get(slot);
+    const card = document.createElement("div");
+    card.className = "board__slot";
+
+    const num = document.createElement("span");
+    num.className = "board__num";
+    num.textContent = "#" + String(slot).padStart(2, "0");
+
+    const name = document.createElement("span");
+    name.className = "board__name";
+
+    if (team && team.confirmed) {
+      card.classList.add("is-taken");
+      // textContent, not innerHTML — a team name is user input and lands on a
+      // page everyone sees.
+      name.textContent = team.name;
+    } else if (team) {
+      card.classList.add("is-holding");
+      name.textContent = "Payment pending…";
+    } else {
+      name.textContent = "Open";
+    }
+
+    card.append(num, name);
+    grid.append(card);
+  }
+
+  const confirmed = teams.filter((t) => t.confirmed).length;
+  el("boardSub").textContent = confirmed
+    ? `${confirmed} team${confirmed === 1 ? "" : "s"} confirmed. Entry fee verify hote hi naam yahan aa jata hai.`
+    : "Abhi koi team confirm nahi hui. Entry fee verify hote hi naam yahan aa jayega.";
+}
+
 /* ---------- Render slots ---------- */
 /* Mirrors the admin toggle so the panel can label its button without a second fetch. */
 let registrationOpen = true;
 
 async function renderSlots() {
-  let taken, total, open, roomLive;
+  let taken, total, open, roomLive, teams;
   try {
-    ({ taken, total, open, roomLive } = await API.slots());
+    ({ taken, total, open, roomLive, teams } = await API.slots());
   } catch (err) {
     console.error("Slot fetch failed:", err);
     slotsLeftEl.textContent = "—";
@@ -85,6 +136,7 @@ async function renderSlots() {
   // Older deploys don't send `open` — absent means the toggle isn't in play.
   registrationOpen = open !== false;
   applyRoom(Boolean(roomLive));
+  renderBoard(teams, total);
 
   const left = Math.max(0, total - taken);
   const pct = Math.min(100, (taken / total) * 100);
@@ -299,13 +351,30 @@ const UPI_APPS = [
 ];
 
 function upiQuery(fee, teamId) {
-  return [
+  const parts = [
     "pa=" + encodeURIComponent(fee.vpa),
     "pn=" + encodeURIComponent(fee.name || "Fragify Esports"),
-    "am=" + encodeURIComponent(fee.amount),
-    "cu=INR",
-    "tn=" + encodeURIComponent("Fragify entry " + teamId),
-  ].join("&");
+  ];
+  // Merchant-QR signature parameters, verbatim from the QR the admin pasted. A
+  // merchant VPA sent without them is refused: "the receiver is not accepting
+  // payments on this specific UPI ID".
+  for (const [key, value] of Object.entries(fee.extra || {})) {
+    parts.push(key + "=" + encodeURIComponent(value));
+  }
+  parts.push("am=" + encodeURIComponent(fee.amount));
+  parts.push("cu=INR");
+  parts.push("tn=" + encodeURIComponent("Fragify entry " + teamId));
+  return parts.join("&");
+}
+
+/* What the admin field should hold: a bare VPA when that's all there is, and the whole
+   signed link when the fee came from a merchant QR. */
+function payeeField(fee) {
+  const extra = Object.entries(fee.extra || {});
+  if (!extra.length) return fee.vpa || "";
+  const parts = ["pa=" + encodeURIComponent(fee.vpa)];
+  for (const [key, value] of extra) parts.push(key + "=" + encodeURIComponent(value));
+  return "upi://pay?" + parts.join("&");
 }
 
 /* Points a set of app buttons at the same payment. `prefix` is the id prefix the
@@ -362,6 +431,12 @@ function showPayPanel(info) {
   if (due && fee) {
     setPayLinks("pay", fee, info.teamId);
     el("payVpa").textContent = fee.vpa;
+    el("payAmt").textContent = String(fee.amount);
+    el("payTn").textContent = info.teamId;
+    // Paying a number instead of a VPA is the route the UPI apps themselves
+    // suggest when they refuse a link, so surface it when one is configured.
+    el("payPhone").textContent = fee.phone || "";
+    el("payPhoneRow").hidden = !fee.phone;
   }
 
   el("payGate").hidden = true;
@@ -455,13 +530,17 @@ el("utrForm").addEventListener("submit", async (e) => {
   }
 });
 
-el("payCopyBtn").addEventListener("click", async () => {
-  const btn = el("payCopyBtn");
+/* Delegated so one handler covers the UPI ID, the mobile number and the note. */
+el("payDue").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".pay__copy");
+  if (!btn) return;
+
+  const value = el(btn.dataset.copy).textContent;
   try {
-    await navigator.clipboard.writeText(el("payVpa").textContent);
+    await navigator.clipboard.writeText(value);
     btn.textContent = "Copied ✓";
   } catch {
-    // Clipboard access needs HTTPS and a permission — the ID is on screen anyway.
+    // Clipboard access needs HTTPS and a permission — the value is on screen anyway.
     btn.textContent = "Copy nahi hua";
   }
   setTimeout(() => { btn.textContent = "Copy"; }, 1500);
@@ -700,11 +779,13 @@ function showSuccess(teamName, res) {
     // configured after this page was loaded.
     setPayLinks("modal", res.paymentDue, res.teamId);
     payApps.hidden = false;
+    el("modalTip").hidden = false;
     el("modalClose").textContent = "Payment kar liya → UTR daalo";
     pendingPayment = true;
   } else {
     payNote.hidden = true;
     payApps.hidden = true;
+    el("modalTip").hidden = true;
     el("modalClose").textContent = "Done";
     pendingPayment = false;
   }
@@ -961,9 +1042,12 @@ function closeUpiModal() {
 el("adminUpiBtn").addEventListener("click", () => {
   setUpiAlert("");
   // Prefill from what's live so a small edit doesn't mean retyping the UPI ID.
-  el("uVpa").value = entryFee?.vpa || "";
+  // A merchant QR goes back in as the full link — prefilling the bare VPA would
+  // silently drop the signature on the next save.
+  el("uVpa").value = entryFee ? payeeField(entryFee) : "";
   el("uName").value = entryFee?.name || "";
   el("uAmount").value = entryFee?.amount || "";
+  el("uPhone").value = entryFee?.phone || "";
   upiModal.hidden = false;
 });
 
@@ -984,6 +1068,7 @@ upiForm.addEventListener("submit", async (e) => {
         vpa: el("uVpa").value.trim(),
         name: el("uName").value.trim(),
         amount: Number(el("uAmount").value.trim()),
+        phone: el("uPhone").value.trim(),
       },
       adminKey
     );

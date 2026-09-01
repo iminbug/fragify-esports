@@ -93,8 +93,25 @@ async function getEntryFee() {
   return upi;
 }
 
-async function countTaken() {
-  return (await activeRegistrations()).length;
+/* The public teamboard. This endpoint needs no credentials, so it carries the two
+   things a spectator has any business seeing — the seat and, once the entry fee is
+   settled, who holds it. Never the phone number, leader, Team ID or password.
+
+   A seat that is still paying shows as occupied but nameless: the slot is genuinely
+   taken, yet naming a team before its fee clears would put squads on the board that
+   may lapse in twenty minutes. */
+function publicBoard(list) {
+  return list
+    .map((r) => {
+      // Registrations predating entry fees have no status; they never owed anything.
+      const status = r.payment_status || "verified";
+      return {
+        slot: Number(r.slot_number),
+        name: status === "verified" ? r.team_name : null,
+        confirmed: status === "verified",
+      };
+    })
+    .sort((a, b) => a.slot - b.slot);
 }
 
 /* Admins can close registration early from the panel. The key is absent until the
@@ -121,12 +138,13 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     try {
-      const taken = await countTaken();
+      const list = await activeRegistrations();
       return res.status(200).json({
-        taken,
+        taken: list.length,
         total: TOTAL_SLOTS,
         open: await isRegistrationOpen(),
         roomLive: await isRoomLive(),
+        teams: publicBoard(list),
       });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -221,6 +239,7 @@ export default async function handler(req, res) {
               holdMinutes: HOLD_MINUTES,
               vpa: entryFee.vpa,
               name: entryFee.name,
+              extra: entryFee.extra || {},
             }
           : null,
       });

@@ -68,7 +68,15 @@ export default async function handler(req, res) {
           ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
           : null,
       entryFee: upi?.vpa && upi.amount > 0
-        ? { vpa: upi.vpa, name: upi.name, amount: upi.amount }
+        ? {
+            vpa: upi.vpa,
+            name: upi.name,
+            amount: upi.amount,
+            phone: upi.phone || null,
+            // Merchant-QR signature parameters; without them the paying app
+            // refuses a link-started payment to a merchant VPA.
+            extra: upi.extra || {},
+          }
         : null,
     });
   } catch (err) {

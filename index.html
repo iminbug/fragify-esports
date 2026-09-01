@@ -187,22 +187,48 @@
           <p class="pay__status" id="payStatus"></p>
           <p class="pay__hold" id="payHold" hidden></p>
 
-          <!-- Everything below is only for a team that still owes money -->
+          <!-- Everything below is only for a team that still owes money.
+               Manual first: a typed VPA always goes through, while a link-started
+               payment depends on what the paying app allows. -->
           <div id="payDue" hidden>
-            <p class="pay__apps-label">Apna UPI app chuno — amount aur note apne aap bhar jayenge:</p>
+            <p class="pay__manual-label">
+              <strong>Sabse pakka tareeka</strong> — ye UPI ID copy karke apne UPI app me paste karo:
+            </p>
+            <div class="pay__ids">
+              <div class="pay__id-row">
+                <span class="pay__id-label">UPI ID</span>
+                <span class="pay__id-value" id="payVpa">—</span>
+                <button type="button" class="pay__copy" data-copy="payVpa">Copy</button>
+              </div>
+              <div class="pay__id-row" id="payPhoneRow" hidden>
+                <span class="pay__id-label">Mobile number</span>
+                <span class="pay__id-value" id="payPhone">—</span>
+                <button type="button" class="pay__copy" data-copy="payPhone">Copy</button>
+              </div>
+              <div class="pay__id-row">
+                <span class="pay__id-label">Amount</span>
+                <span class="pay__id-value" id="payAmt">—</span>
+                <button type="button" class="pay__copy" data-copy="payAmt">Copy</button>
+              </div>
+              <div class="pay__id-row">
+                <span class="pay__id-label">Note me likho</span>
+                <span class="pay__id-value" id="payTn">—</span>
+                <button type="button" class="pay__copy" data-copy="payTn">Copy</button>
+              </div>
+            </div>
+
+            <p class="pay__apps-label">Ya seedha app khol lo — amount aur note apne aap bhar jayenge:</p>
             <div class="pay__apps">
               <a class="pay__app" id="payPhonePe" href="#">PhonePe</a>
               <a class="pay__app" id="payGpay" href="#">Google Pay</a>
               <a class="pay__app" id="payPaytm" href="#">Paytm</a>
               <a class="pay__app" id="payAny" href="#">Koi aur UPI app</a>
             </div>
-
-            <p class="pay__vpa">
-              Ya UPI ID copy karke manually bhejo:
-              <span class="pay__vpa-value" id="payVpa">—</span>
-              <button type="button" class="pay__copy" id="payCopyBtn">Copy</button>
-            </p>
-            <p class="pay__warn">⚠️ WhatsApp Pay se mat bhejo — wo is tarah ke link support nahi karta.</p>
+            <ul class="pay__tips">
+              <li>App bole <strong>"receiver is not accepting payments on this specific UPI ID"</strong> — to upar wali UPI ID copy karke <strong>manually</strong> bhejo. Paisa nahi katta, wahi payment chal jayegi.</li>
+              <li>App me <strong>"You can pay up to ₹2,000 with QR codes"</strong> wala notice aaye to <strong>DISMISS</strong> dabao — wo error nahi hai.</li>
+              <li>WhatsApp Pay se mat bhejo — usme ye link theek se nahi chalta.</li>
+            </ul>
 
             <form class="pay__utr" id="utrForm">
               <div class="field">
@@ -239,6 +265,15 @@
         <h3 class="rules__title">⚠️ Mandatory Rules</h3>
         <ul class="rules__list" id="rulesList"></ul>
       </div>
+    </section>
+
+    <!-- TEAMBOARD — public roster. Names appear only once the entry fee is settled. -->
+    <section class="board" id="boardSection">
+      <div class="board__head">
+        <h2>Confirmed Teams</h2>
+        <p id="boardSub">Entry fee verify hote hi team ka naam apne slot par aa jata hai.</p>
+      </div>
+      <div class="board__grid" id="boardGrid"></div>
     </section>
 
     <!-- REGISTRATION -->
@@ -377,6 +412,9 @@
         <a class="pay__app" id="modalPaytm" href="#">Paytm</a>
         <a class="pay__app" id="modalAny" href="#">Koi aur UPI app</a>
       </div>
+      <p class="modal__tip" id="modalTip" hidden>
+        App payment reject kare to <strong>Done</strong> dabao — neeche UPI ID copy karke manually bhej sakte ho.
+      </p>
       <button class="modal__close" id="modalClose">Done</button>
     </div>
   </div>
@@ -460,13 +498,23 @@
 
       <form id="upiForm" class="details-form">
         <div class="details-form__grid">
-          <div class="field">
-            <label for="uVpa">Your UPI ID</label>
-            <input type="text" id="uVpa" name="vpa" placeholder="e.g. 9217191222@ybl" autocomplete="off" />
+          <div class="field field--full">
+            <label for="uVpa">Your UPI ID <em>ya poora QR link</em></label>
+            <input type="text" id="uVpa" name="vpa" placeholder="9217191222@ybl — ya upi://pay?pa=...&amp;sign=..." autocomplete="off" />
+            <p class="field__help">
+              Merchant QR use kar rahe ho? Sirf UPI ID kaafi nahi — QR ke saath jo
+              <strong>sign</strong> aata hai wo bhi chahiye, warna app "receiver is not accepting
+              payments on this specific UPI ID" bolta hai. Apna QR kisi bhi QR-scanner app se
+              scan karke poora <code>upi://pay?...</code> text yahan paste kar do.
+            </p>
           </div>
           <div class="field">
             <label for="uAmount">Entry Fee (₹)</label>
             <input type="text" id="uAmount" name="amount" placeholder="40" inputmode="numeric" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="uPhone">UPI Mobile Number (optional)</label>
+            <input type="tel" id="uPhone" name="phone" placeholder="10-digit number" inputmode="numeric" maxlength="10" autocomplete="off" />
           </div>
           <div class="field field--full">
             <label for="uName">Payee Name (UPI app me dikhega)</label>
