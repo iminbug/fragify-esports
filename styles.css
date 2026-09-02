@@ -151,7 +151,14 @@ body {
 }
 .slots__left.is-low { color: var(--danger); }
 
-.hero__cta { margin-top: 34px; display: inline-block; }
+/* Two calls to action on one line, wrapping to a stack when the row runs out of room.
+   `.btn--whatsapp` is full-width everywhere else it is used (modal, pay panel), so the
+   width has to be handed back here or it would push the register button onto its own row. */
+.hero__actions {
+  margin-top: 34px; display: flex; flex-wrap: wrap;
+  justify-content: center; align-items: center; gap: 14px;
+}
+.hero__actions .btn--whatsapp { width: auto; }
 
 /* ---------- Buttons ---------- */
 .btn {
@@ -629,7 +636,10 @@ body {
 .connect__head p { color: var(--muted); margin-top: 6px; }
 
 .socials {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px;
+  /* auto-fit rather than a fixed three: a hard-coded count strands the fourth card
+     alone on a full-width row of its own. */
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
+  gap: 16px; margin-top: 26px;
 }
 .social {
   display: flex; align-items: center; gap: 14px; text-align: left;
@@ -651,6 +661,7 @@ body {
 .social--yt { --brand: var(--youtube); --brand-soft: rgba(255,0,51,0.12); }
 .social--ig { --brand: var(--instagram); --brand-soft: rgba(225,48,108,0.12); }
 .social--call { --brand: var(--whatsapp); --brand-soft: rgba(37,211,102,0.12); }
+.social--community { --brand: var(--whatsapp); --brand-soft: rgba(37,211,102,0.12); }
 
 /* ---------- Footer ---------- */
 .footer { text-align: center; color: var(--muted); padding: 40px 24px; font-size: 0.88rem; }
@@ -719,4 +730,9 @@ body {
   .nav__name { font-size: 0.9rem; }
   .nav__tag { display: none; }
   .btn { width: 100%; text-align: center; }
+  /* `.btn { width: 100% }` here loses to `.hero__actions .btn--whatsapp { width: auto }`
+     — a media query adds no specificity — so the two hero buttons would end up different
+     widths once they stack. Say it again at the specificity that wins. */
+  .hero__actions { flex-direction: column; }
+  .hero__actions .btn--whatsapp { width: 100%; }
 }

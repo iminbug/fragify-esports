@@ -1,5 +1,6 @@
 import { kv } from "@vercel/kv";
 import { authenticateTeam, writeRegistration } from "../lib/team-auth.js";
+import { notifyUtrSubmitted } from "../lib/notify.js";
 
 /* A team checks its own payment status here, and submits the UTR from its UPI app.
    Everything is behind the Team ID + password issued at registration, so nobody can
@@ -27,6 +28,7 @@ export default async function handler(req, res) {
     if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
     let registration = auth.registration;
+    const upi = (await kv.get("config:upi")) || null;
 
     // A UTR in the body means "I've paid" — otherwise this is just a status check.
     if (utr !== undefined && utr !== null && String(utr).trim() !== "") {
@@ -49,9 +51,23 @@ export default async function handler(req, res) {
         payment_deadline: null,
         submitted_at: new Date().toISOString(),
       });
+
+      /* Tell the organiser, but only after the write has landed — if the alert is what
+         fails, the UTR is already saved and still shows up in the admin panel.
+
+         Awaited rather than left dangling: a serverless function is frozen the instant
+         it responds, so a fire-and-forget promise here would simply never run. The
+         result is deliberately ignored; a team that has genuinely paid must not see its
+         submission rejected because Meta was slow or a token had expired. */
+      await notifyUtrSubmitted({
+        team: registration.team_name,
+        slot: `#${String(registration.slot_number).padStart(2, "0")}`,
+        phone: registration.phone,
+        utr: reference,
+        amount: upi?.amount ? `₹${upi.amount}` : "—",
+      });
     }
 
-    const upi = (await kv.get("config:upi")) || null;
     const deadline = registration.payment_deadline;
     const status = registration.payment_status || "verified";
 

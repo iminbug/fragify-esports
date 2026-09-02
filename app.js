@@ -35,6 +35,8 @@ const API = {
     apiPost("/api/payment", { teamId, password, utr }),
   updateLink: (whatsappLink, adminKey) =>
     apiPost("/api/config", { whatsappLink, adminKey }),
+  testNotify: (adminKey) =>
+    apiPost("/api/config", { testNotify: true, adminKey }),
   setRegistrationOpen: (registrationOpen, adminKey) =>
     apiPost("/api/config", { registrationOpen, adminKey }),
   updateTournament: (tournament, adminKey) =>
@@ -1157,6 +1159,29 @@ el("adminLinkBtn").addEventListener("click", async () => {
     alert("✅ Link updated for everyone:\n\n" + newLink);
   } catch (err) {
     alert("❌ " + err.message);
+  }
+});
+
+/* Sends a real alert with sample values down the same path a genuine UTR takes, so
+   the token, template name and language code all get exercised. Worth having: none of
+   those three are visible from here, and the alternative way to discover a broken one
+   is a payment nobody was told about. */
+el("adminTestNotifyBtn").addEventListener("click", async () => {
+  const btn = el("adminTestNotifyBtn");
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "🔔 Sending…";
+
+  try {
+    const res = await API.testNotify(adminKey);
+    alert("✅ " + (res.message || "Test alert sent — check your WhatsApp"));
+  } catch (err) {
+    // Meta's own wording comes through here — it names the actual problem
+    // (expired token, wrong template name, en vs en_US) far better than we could.
+    alert("❌ " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
   }
 });
 

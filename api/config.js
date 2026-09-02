@@ -1,4 +1,5 @@
 import { kv } from "@vercel/kv";
+import { notifyUtrSubmitted, notifyConfigured } from "../lib/notify.js";
 
 /* The toggle is absent until an admin flips it, so treat "not set" as open. */
 async function isRegistrationOpen() {
@@ -223,7 +224,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { whatsappLink, registrationOpen, tournament, room, upi, adminKey } = req.body || {};
+    const { whatsappLink, registrationOpen, tournament, room, upi, testNotify, adminKey } =
+      req.body || {};
 
     if (!process.env.ADMIN_KEY) {
       return res.status(500).json({ error: "Admin key is not configured on the server" });
@@ -233,6 +235,29 @@ export default async function handler(req, res) {
     }
 
     try {
+      /* Cloud API setup has a lot of ways to be almost-right: a tester token that
+         expired overnight, a template name that doesn't match, en against en_US. With
+         no way to try it, the first sign of trouble would be a missed alert on match
+         day. So send a real alert with sample values and hand Meta's own error back
+         verbatim — that error text is what makes it fixable in a minute. */
+      if (testNotify) {
+        if (!notifyConfigured()) {
+          return res.status(400).json({
+            error: "Set WA_TOKEN, WA_PHONE_ID and WA_ADMIN_NUMBER in Vercel first",
+          });
+        }
+        const result = await notifyUtrSubmitted({
+          team: "Test Squad",
+          slot: "#00",
+          phone: "9999999999",
+          utr: "TESTUTR00000",
+          amount: "₹0",
+        });
+        return result.ok
+          ? res.status(200).json({ ok: true, message: "Test alert sent — check your WhatsApp" })
+          : res.status(400).json({ error: result.error || "Could not send the test alert" });
+      }
+
       // Both settings live here; a request may carry either one on its own.
       if (whatsappLink !== undefined) {
         const link = normalizeLink(whatsappLink);

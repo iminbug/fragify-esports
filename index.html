@@ -79,7 +79,14 @@
         </div>
       </div>
 
-      <a href="#register" class="btn btn--primary hero__cta" id="heroCta">Register Now →</a>
+      <div class="hero__actions">
+        <a href="#register" class="btn btn--primary" id="heroCta">Register Now →</a>
+        <!-- The open community: announcements, scrims and results, joinable by anyone.
+             Deliberately NOT the invite an admin sets in the panel — that one is still
+             handed over only once a team's entry fee is verified. Two links, two jobs. -->
+        <a href="https://chat.whatsapp.com/ELLWjH90FlMI4vjxHe5sR0" target="_blank" rel="noopener"
+           class="btn btn--whatsapp">💬 Join Community</a>
+      </div>
     </section>
 
     <!-- INFO CARDS -->
@@ -383,6 +390,14 @@
             <span class="social__value">+91 92171 91222</span>
           </span>
         </a>
+
+        <a class="social social--community" href="https://chat.whatsapp.com/ELLWjH90FlMI4vjxHe5sR0" target="_blank" rel="noopener">
+          <span class="social__icon"><svg aria-hidden="true"><use href="#i-wa" /></svg></span>
+          <span>
+            <span class="social__label">Community</span>
+            <span class="social__value">Join the Group</span>
+          </span>
+        </a>
       </div>
     </section>
   </main>
@@ -446,6 +461,7 @@
         <button class="admin-btn" id="adminUpiBtn">💳 Entry Fee: …</button>
         <button class="admin-btn" id="adminViewBtn">📋 View All Registrations</button>
         <button class="admin-btn" id="adminLinkBtn">🔗 Update WhatsApp Link</button>
+        <button class="admin-btn" id="adminTestNotifyBtn">🔔 Test UTR Alert</button>
         <button class="admin-btn admin-btn--danger" id="adminResetBtn">🗑️ Reset All Slots</button>
       </div>
       <button class="admin-close" id="adminCloseBtn">Close</button>
