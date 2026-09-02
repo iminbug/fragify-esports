@@ -1174,10 +1174,10 @@ el("adminTestNotifyBtn").addEventListener("click", async () => {
 
   try {
     const res = await API.testNotify(adminKey);
-    alert("✅ " + (res.message || "Test alert sent — check your WhatsApp"));
+    alert("✅ " + (res.message || "Test alert sent"));
   } catch (err) {
-    // Meta's own wording comes through here — it names the actual problem
-    // (expired token, wrong template name, en vs en_US) far better than we could.
+    // The provider's own wording comes through here — it names the actual problem
+    // (expired token, wrong chat id, wrong template name) better than we could.
     alert("❌ " + err.message);
   } finally {
     btn.disabled = false;

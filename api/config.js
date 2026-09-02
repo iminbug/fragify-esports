@@ -235,15 +235,17 @@ export default async function handler(req, res) {
     }
 
     try {
-      /* Cloud API setup has a lot of ways to be almost-right: a tester token that
-         expired overnight, a template name that doesn't match, en against en_US. With
-         no way to try it, the first sign of trouble would be a missed alert on match
-         day. So send a real alert with sample values and hand Meta's own error back
-         verbatim — that error text is what makes it fixable in a minute. */
+      /* An alert channel has a lot of ways to be almost-right: a token that expired
+         overnight, a chat id off by a minus sign, a template name that doesn't match.
+         With no way to try it, the first sign of trouble would be a missed alert on
+         match day. So send a real alert with sample values and hand the provider's own
+         error back verbatim — that error text is what makes it fixable in a minute. */
       if (testNotify) {
         if (!notifyConfigured()) {
           return res.status(400).json({
-            error: "Set WA_TOKEN, WA_PHONE_ID and WA_ADMIN_NUMBER in Vercel first",
+            error:
+              "No alert channel is set up yet. Add TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID, " +
+              "or NTFY_TOPIC, or DISCORD_WEBHOOK, in Vercel — then redeploy.",
           });
         }
         const result = await notifyUtrSubmitted({
@@ -254,7 +256,12 @@ export default async function handler(req, res) {
           amount: "₹0",
         });
         return result.ok
-          ? res.status(200).json({ ok: true, message: "Test alert sent — check your WhatsApp" })
+          ? res.status(200).json({
+              ok: true,
+              message:
+                "Test alert sent via " +
+                result.results.filter((r) => r.ok).map((r) => r.channel).join(", "),
+            })
           : res.status(400).json({ error: result.error || "Could not send the test alert" });
       }
 
