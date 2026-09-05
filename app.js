@@ -943,6 +943,8 @@ if (new URLSearchParams(window.location.search).get("admin")) {
       .then(() => {
         adminKey = key;
         el("adminPanel").hidden = false;
+        // Matches are what an admin is almost always here for — land on them open.
+        openAccSection("accMatches");
       })
       .catch((err) => alert("❌ " + err.message));
   }
@@ -955,8 +957,35 @@ el("adminBackdrop").addEventListener("click", () => {
   el("adminPanel").hidden = true;
 });
 
+/* ---------- Admin: accordion ---------- */
+/* One section open at a time, and a section fetches its content the moment it opens —
+   an accordion that expands onto stale rows would invite acting on a team that
+   already cancelled. */
+const ACC_LOADERS = {
+  accMatches: () => renderMatchList(),
+  accRegs: () => renderRegistrations(),
+  accDetails: () => prefillDetailsForm(),
+};
+
+async function openAccSection(id) {
+  for (const body of document.querySelectorAll(".admin-acc__body")) {
+    body.hidden = body.id !== id;
+  }
+  for (const head of document.querySelectorAll(".admin-acc__head")) {
+    head.classList.toggle("is-open", head.dataset.acc === id);
+  }
+  if (id && ACC_LOADERS[id]) await ACC_LOADERS[id]();
+}
+
+el("adminAcc").addEventListener("click", (e) => {
+  const head = e.target.closest(".admin-acc__head");
+  if (!head) return;
+  const isOpen = head.classList.contains("is-open");
+  // Clicking the open section's header just collapses it.
+  openAccSection(isOpen ? null : head.dataset.acc);
+});
+
 /* ---------- Admin: match manager ---------- */
-const matchesModal = el("matchesModal");
 
 function matchAdminRow(m) {
   const lastSlot = m.firstSlot + m.totalSlots - 1;
@@ -997,18 +1026,6 @@ async function renderMatchList() {
     box.innerHTML = `<p style="text-align:center;color:var(--danger)">${escapeHtml(err.message)}</p>`;
   }
 }
-
-el("adminMatchesBtn").addEventListener("click", async () => {
-  matchesModal.hidden = false;
-  await renderMatchList();
-});
-
-matchesModal.querySelector(".modal__close").addEventListener("click", () => {
-  matchesModal.hidden = true;
-});
-matchesModal.querySelector(".modal__backdrop").addEventListener("click", () => {
-  matchesModal.hidden = true;
-});
 
 /* Delegated: the rows are rebuilt after every action, so per-button listeners would
    be re-bound each time. */
@@ -1205,11 +1222,6 @@ async function renderRegistrations() {
   }
 }
 
-el("adminViewBtn").addEventListener("click", async () => {
-  el("regModal").hidden = false;
-  await renderRegistrations();
-});
-
 /* Delegated: the rows are rebuilt after every action, so per-button listeners would
    be re-bound each time. */
 el("regList").addEventListener("click", async (e) => {
@@ -1239,13 +1251,6 @@ el("regList").addEventListener("click", async (e) => {
     alert("❌ " + err.message);
     btn.disabled = false;
   }
-});
-
-el("regModal").querySelector(".modal__close").addEventListener("click", () => {
-  el("regModal").hidden = true;
-});
-el("regModal").querySelector(".modal__backdrop").addEventListener("click", () => {
-  el("regModal").hidden = true;
 });
 
 /* ---------- Admin: room ID & password (per match) ---------- */
@@ -1318,8 +1323,7 @@ el("roomClearBtn").addEventListener("click", async () => {
   }
 });
 
-/* ---------- Admin: site details editor ---------- */
-const detailsModal = el("detailsModal");
+/* ---------- Admin: site details editor (inline accordion section) ---------- */
 const detailsForm = el("detailsForm");
 
 function setDetailsAlert(msg) {
@@ -1328,28 +1332,29 @@ function setDetailsAlert(msg) {
   alert.hidden = !msg;
 }
 
-function closeDetailsModal() {
-  detailsModal.hidden = true;
+function setDetailsStatus(msg) {
+  const status = el("detailsStatus");
+  status.textContent = msg || "";
+  status.hidden = !msg;
 }
 
-el("adminDetailsBtn").addEventListener("click", () => {
+/* Runs every time the section opens. Prefill from whatever is live so an edit never
+   silently wipes other fields. */
+function prefillDetailsForm() {
   setDetailsAlert("");
-  // Prefill from whatever is live so an edit never silently wipes other fields.
+  setDetailsStatus("");
   for (const { key } of [...DETAIL_TILES, ...PRIZE_TILES]) {
     detailsForm[key].value = tournament[key] || "";
   }
   detailsForm.rules.value = Array.isArray(tournament.rules)
     ? tournament.rules.join("\n")
     : "";
-  detailsModal.hidden = false;
-});
-
-detailsModal.querySelector(".modal__close").addEventListener("click", closeDetailsModal);
-detailsModal.querySelector(".modal__backdrop").addEventListener("click", closeDetailsModal);
+}
 
 detailsForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   setDetailsAlert("");
+  setDetailsStatus("");
 
   const payload = {};
   for (const { key } of [...DETAIL_TILES, ...PRIZE_TILES]) {
@@ -1368,8 +1373,9 @@ detailsForm.addEventListener("submit", async (e) => {
     const res = await API.updateTournament(payload, adminKey);
     tournament = res.tournament || {};
     renderDetails();
-    closeDetailsModal();
-    alert("✅ Site details updated");
+    // The form stays open in its section, so say "saved" right here rather than
+    // with a popup that covers the very fields just edited.
+    setDetailsStatus("✅ Saved — live on the site now.");
   } catch (err) {
     setDetailsAlert(err.message);
   } finally {
@@ -1385,17 +1391,22 @@ detailsForm.addEventListener("submit", async (e) => {
 el("adminTestNotifyBtn").addEventListener("click", async () => {
   const btn = el("adminTestNotifyBtn");
   const label = btn.textContent;
+  const status = el("testNotifyStatus");
   btn.disabled = true;
-  btn.textContent = "🔔 Sending…";
+  btn.textContent = "Sending…";
+  status.hidden = true;
+  status.classList.remove("is-error");
 
   try {
     const res = await API.testNotify(adminKey);
-    alert("✅ " + (res.message || "Test alert sent"));
+    status.textContent = "✅ " + (res.message || "Test alert sent");
   } catch (err) {
     // The provider's own wording comes through here — it names the actual problem
     // (expired token, wrong chat id, wrong template name) better than we could.
-    alert("❌ " + err.message);
+    status.textContent = "❌ " + err.message;
+    status.classList.add("is-error");
   } finally {
+    status.hidden = false;
     btn.disabled = false;
     btn.textContent = label;
   }
