@@ -736,3 +736,43 @@ body {
   .hero__actions { flex-direction: column; }
   .hero__actions .btn--whatsapp { width: 100%; }
 }
+
+/* ---------- Multiple matches ---------- */
+/* One roster block per match on the public teamboard. */
+.board__match { margin-bottom: 30px; }
+.board__match:last-child { margin-bottom: 0; }
+.board__match-title {
+  font-family: "Orbitron", sans-serif; font-size: 0.95rem; letter-spacing: 0.5px;
+  color: var(--accent-2); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 10px;
+}
+.board__match-title::after {
+  content: ""; flex: 1; height: 1px; background: var(--border);
+}
+
+/* The match picker on the registration form: one selectable card per open match. */
+.match-choice { display: grid; gap: 10px; }
+.match-opt {
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+  transition: border-color .15s ease, background .15s ease;
+}
+.match-opt:hover { border-color: var(--accent); }
+.match-opt input {
+  flex: 0 0 auto; width: 18px; height: 18px; margin: 0;
+  accent-color: var(--accent); cursor: pointer;
+}
+.match-opt__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.match-opt__name { font-weight: 700; font-size: 1rem; }
+.match-opt__meta { color: var(--muted); font-size: 0.84rem; }
+/* :has() is supported by every browser this page targets; older ones just miss the
+   highlight, the checked radio itself still shows the pick. */
+.match-opt:has(input:checked) {
+  border-color: var(--accent); background: rgba(255,155,33,0.08);
+}
+.match-opt:has(input:checked) .match-opt__name { color: var(--accent); }
+
+/* Which match a fresh slot belongs to, on the success modal. */
+.modal__match { color: var(--accent-2); font-size: 0.92rem; margin: -6px 0 4px; }
+.modal__match:empty { display: none; }

@@ -1,5 +1,10 @@
 /* ============================================================
-   Fragify Esports — Registration (Vercel + Supabase backend)
+   Fragify Esports — Registration (Vercel + KV backend)
+
+   Multiple matches can be open at once. Every match carries its
+   own slot pool, entry fee, room and WhatsApp invite — the page
+   draws one board and one form option per match, and a Team ID
+   like FRG-M2-007 names both the match and the seat.
    ============================================================ */
 
 const CONFIG = {
@@ -33,28 +38,28 @@ const API = {
   /* No UTR = "what's my status?"; a UTR = "here's my payment reference". */
   payment: (teamId, password, utr) =>
     apiPost("/api/payment", { teamId, password, utr }),
-  updateLink: (whatsappLink, adminKey) =>
-    apiPost("/api/config", { whatsappLink, adminKey }),
   testNotify: (adminKey) =>
     apiPost("/api/config", { testNotify: true, adminKey }),
-  setRegistrationOpen: (registrationOpen, adminKey) =>
-    apiPost("/api/config", { registrationOpen, adminKey }),
   updateTournament: (tournament, adminKey) =>
     apiPost("/api/config", { tournament, adminKey }),
+  createMatch: (match, adminKey) =>
+    apiPost("/api/config", { createMatch: match, adminKey }),
+  updateMatch: (match, adminKey) =>
+    apiPost("/api/config", { updateMatch: match, adminKey }),
+  deleteMatch: (matchId, adminKey) =>
+    apiPost("/api/config", { deleteMatch: matchId, adminKey }),
   postRoom: (room, adminKey) =>
     apiPost("/api/config", { room, adminKey }),
-  setUpi: (upi, adminKey) =>
-    apiPost("/api/config", { upi, adminKey }),
   listRegistrations: (adminKey) =>
     apiPost("/api/admin", { action: "list", adminKey }),
-  resetSlots: (adminKey) =>
-    apiPost("/api/admin", { action: "reset", adminKey }),
-  verifyPayment: (slot, adminKey) =>
-    apiPost("/api/admin", { action: "verify", slot, adminKey }),
-  rejectPayment: (slot, adminKey) =>
-    apiPost("/api/admin", { action: "reject", slot, adminKey }),
-  cancelRegistration: (slot, adminKey) =>
-    apiPost("/api/admin", { action: "cancel", slot, adminKey }),
+  resetMatch: (matchId, adminKey) =>
+    apiPost("/api/admin", { action: "reset", matchId, adminKey }),
+  verifyPayment: (matchId, slot, adminKey) =>
+    apiPost("/api/admin", { action: "verify", matchId, slot, adminKey }),
+  rejectPayment: (matchId, slot, adminKey) =>
+    apiPost("/api/admin", { action: "reject", matchId, slot, adminKey }),
+  cancelRegistration: (matchId, slot, adminKey) =>
+    apiPost("/api/admin", { action: "cancel", matchId, slot, adminKey }),
 };
 
 /* ---------- DOM refs ---------- */
@@ -70,88 +75,190 @@ const submitBtn = el("submitBtn");
 const heroCta = el("heroCta");
 const modal = el("successModal");
 
-/* ---------- Teamboard ---------- */
-/* Every seat is drawn, taken or not, so the board reads as the match roster rather
-   than a list that quietly grows. Slot numbers start at #06 — the first five belong
-   to the hosts, not to registration. */
-const FIRST_SLOT = 6;
+/* ---------- Match state ---------- */
+/* The public shape of every match, straight from /api/register:
+   { id, name, matchTime, totalSlots, firstSlot, taken, open, roomLive,
+     feeAmount, teams }. Refreshed on every poll. */
+let matches = [];
 
-function renderBoard(teams, total) {
-  // An older deploy has no `teams` in its response; leave the last good board up
-  // rather than blanking the section on a stale backend.
-  if (!Array.isArray(teams)) return;
+/* Which match the registration form will enter. Survives re-renders of the choice
+   cards, dies when that match closes or fills. */
+let selectedMatchId = null;
 
-  const bySlot = new Map(teams.map((t) => [Number(t.slot), t]));
-  const seats = Number(total) > 0 ? Number(total) : 16;
-  const grid = el("boardGrid");
-  grid.textContent = "";
+function joinableMatches() {
+  return matches.filter((m) => m.open && m.taken < m.totalSlots);
+}
 
-  for (let i = 0; i < seats; i++) {
-    const slot = FIRST_SLOT + i;
-    const team = bySlot.get(slot);
-    const card = document.createElement("div");
-    card.className = "board__slot";
+/* ---------- Teamboards ---------- */
+/* One roster per match. Every seat is drawn, taken or not, so each board reads as
+   that match's roster rather than a list that quietly grows. */
+function renderBoards() {
+  const wrap = el("boardsWrap");
+  el("boardSection").hidden = matches.length === 0;
+  wrap.textContent = "";
 
-    const num = document.createElement("span");
-    num.className = "board__num";
-    num.textContent = "#" + String(slot).padStart(2, "0");
+  let confirmedTotal = 0;
 
-    const name = document.createElement("span");
-    name.className = "board__name";
+  for (const m of matches) {
+    const teams = Array.isArray(m.teams) ? m.teams : [];
+    const bySlot = new Map(teams.map((t) => [Number(t.slot), t]));
+    confirmedTotal += teams.filter((t) => t.confirmed).length;
 
-    if (team && team.confirmed) {
-      card.classList.add("is-taken");
-      // textContent, not innerHTML — a team name is user input and lands on a
-      // page everyone sees.
-      name.textContent = team.name;
-    } else if (team) {
-      card.classList.add("is-holding");
-      name.textContent = "Payment pending…";
-    } else {
-      name.textContent = "Open";
+    const block = document.createElement("div");
+    block.className = "board__match";
+
+    const title = document.createElement("h3");
+    title.className = "board__match-title";
+    // textContent, not innerHTML — the match name is admin input, but no reason
+    // to make it the one string on the page that could carry markup.
+    title.textContent = m.name + (m.matchTime ? " · " + m.matchTime : "");
+
+    const grid = document.createElement("div");
+    grid.className = "board__grid";
+
+    for (let i = 0; i < m.totalSlots; i++) {
+      const slot = m.firstSlot + i;
+      const team = bySlot.get(slot);
+      const card = document.createElement("div");
+      card.className = "board__slot";
+
+      const num = document.createElement("span");
+      num.className = "board__num";
+      num.textContent = "#" + String(slot).padStart(2, "0");
+
+      const name = document.createElement("span");
+      name.className = "board__name";
+
+      if (team && team.confirmed) {
+        card.classList.add("is-taken");
+        // textContent, not innerHTML — a team name is user input and lands on a
+        // page everyone sees.
+        name.textContent = team.name;
+      } else if (team) {
+        card.classList.add("is-holding");
+        name.textContent = "Payment pending…";
+      } else {
+        name.textContent = "Open";
+      }
+
+      card.append(num, name);
+      grid.append(card);
     }
 
-    card.append(num, name);
-    grid.append(card);
+    block.append(title, grid);
+    wrap.append(block);
   }
 
-  const confirmed = teams.filter((t) => t.confirmed).length;
-  el("boardSub").textContent = confirmed
-    ? `${confirmed} team${confirmed === 1 ? "" : "s"} confirmed. A team's name appears here as soon as its entry fee is verified.`
+  el("boardSub").textContent = confirmedTotal
+    ? `${confirmedTotal} team${confirmedTotal === 1 ? "" : "s"} confirmed. A team's name appears here as soon as its entry fee is verified.`
     : "No teams confirmed yet. A team's name appears here as soon as its entry fee is verified.";
 }
 
-/* ---------- Render slots ---------- */
-/* Mirrors the admin toggle so the panel can label its button without a second fetch. */
-let registrationOpen = true;
+/* ---------- Match picker on the form ---------- */
+function renderMatchChoice() {
+  const wrap = el("matchChoice");
+  const joinable = joinableMatches();
 
+  // Keep the player's pick across polls; auto-pick when there is no choice to make.
+  if (!joinable.some((m) => m.id === selectedMatchId)) {
+    selectedMatchId = joinable.length === 1 ? joinable[0].id : null;
+  }
+
+  wrap.textContent = "";
+  for (const m of joinable) {
+    const left = m.totalSlots - m.taken;
+
+    const label = document.createElement("label");
+    label.className = "match-opt";
+
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "matchChoice";
+    input.value = m.id;
+    input.checked = m.id === selectedMatchId;
+
+    const body = document.createElement("span");
+    body.className = "match-opt__body";
+
+    const name = document.createElement("span");
+    name.className = "match-opt__name";
+    name.textContent = m.name;
+
+    const meta = document.createElement("span");
+    meta.className = "match-opt__meta";
+    meta.textContent = [
+      m.matchTime ? "⏰ " + m.matchTime : null,
+      m.feeAmount ? "💳 ₹" + m.feeAmount : "🆓 Free entry",
+      left + " slot" + (left === 1 ? "" : "s") + " left",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    body.append(name, meta);
+    label.append(input, body);
+    wrap.append(label);
+  }
+
+  updateFeeNote();
+}
+
+el("matchChoice").addEventListener("change", (e) => {
+  if (e.target.name !== "matchChoice") return;
+  selectedMatchId = e.target.value;
+  el("matchChoiceError").textContent = "";
+  el("matchField").classList.remove("has-error");
+  updateFeeNote();
+});
+
+/* Say the price of the *chosen* match on the form itself — nobody should find out
+   there's a fee only after they've filled the whole thing in. */
+function updateFeeNote() {
+  const feeNote = el("formFeeNote");
+  const m = matches.find((x) => x.id === selectedMatchId);
+  if (m && m.feeAmount) {
+    feeNote.textContent = `💳 Entry fee ₹${m.feeAmount} — pay by UPI right after you lock your slot.`;
+    feeNote.hidden = false;
+  } else {
+    feeNote.hidden = true;
+  }
+}
+
+/* ---------- Render slots ---------- */
 async function renderSlots() {
-  let taken, total, open, roomLive, teams;
+  let data;
   try {
-    ({ taken, total, open, roomLive, teams } = await API.slots());
+    data = await API.slots();
   } catch (err) {
     console.error("Slot fetch failed:", err);
     slotsLeftEl.textContent = "—";
     return;
   }
+  matches = Array.isArray(data.matches) ? data.matches : [];
 
-  // Older deploys don't send `open` — absent means the toggle isn't in play.
-  registrationOpen = open !== false;
-  applyRoom(Boolean(roomLive));
-  renderBoard(teams, total);
+  applyRoom(matches.some((m) => m.roomLive));
+  renderBoards();
+  renderMatchChoice();
+  syncPaymentSection();
 
+  // The hero meter aggregates every match — it answers "how busy is match day",
+  // while the per-match numbers live on the choice cards and the boards.
+  const total = matches.reduce((n, m) => n + m.totalSlots, 0);
+  const taken = matches.reduce((n, m) => n + m.taken, 0);
   const left = Math.max(0, total - taken);
-  const pct = Math.min(100, (taken / total) * 100);
+  const pct = total > 0 ? Math.min(100, (taken / total) * 100) : 0;
 
   slotsFill.style.width = pct + "%";
   slotsTaken.textContent = taken;
   el("slotsTotal").textContent = total;
-  slotsLeftEl.textContent = left === 0 ? "FULL" : left + " left";
+  slotsLeftEl.textContent = total === 0 ? "—" : left === 0 ? "FULL" : left + " left";
   slotsLeftEl.classList.toggle("is-low", left > 0 && left <= CONFIG.lowSlotThreshold);
 
-  // Two ways to be shut: every slot gone, or an admin closed it early.
-  const isFull = left === 0;
-  const isClosed = isFull || !registrationOpen;
+  // The form only disappears when there is nothing left to join: every match either
+  // full or closed (or none announced yet). One open lobby keeps it on the page.
+  const joinable = joinableMatches();
+  const isClosed = joinable.length === 0;
+  const noMatches = matches.length === 0;
+  const isFull = !noMatches && matches.every((m) => m.taken >= m.totalSlots);
 
   form.hidden = isClosed;
   closedState.hidden = !isClosed;
@@ -159,11 +266,17 @@ async function renderSlots() {
   navStatusText.textContent = isClosed ? "Registration Closed" : "Registration Live";
 
   if (isClosed) {
-    el("closedTitle").textContent = isFull ? "Registration Closed" : "Registration Paused";
-    el("closedMsg").textContent = isFull
-      ? `All ${total} slots are filled. Follow us for the next season drop.`
-      : "Registration is closed right now. Follow us — we'll announce when it reopens.";
-    heroCta.textContent = isFull ? "Slots Full" : "Registration Closed";
+    el("closedTitle").textContent = noMatches
+      ? "No Matches Announced Yet"
+      : isFull
+        ? "Registration Closed"
+        : "Registration Paused";
+    el("closedMsg").textContent = noMatches
+      ? "Match times drop soon. Follow us — the forms open here the moment they do."
+      : isFull
+        ? "Every match is full. Follow us for the next drop."
+        : "Registration is closed right now. Follow us — we'll announce when it reopens.";
+    heroCta.textContent = noMatches ? "Coming Soon" : isFull ? "Slots Full" : "Registration Closed";
     heroCta.style.pointerEvents = "none";
     heroCta.style.opacity = "0.5";
   } else {
@@ -171,22 +284,12 @@ async function renderSlots() {
     heroCta.style.pointerEvents = "";
     heroCta.style.opacity = "";
   }
-
-  updateAdminToggleLabel();
-}
-
-function updateAdminToggleLabel() {
-  const btn = el("adminToggleBtn");
-  if (!btn) return;
-  btn.textContent = registrationOpen
-    ? "🟢 Registration: LIVE — tap to close"
-    : "🔴 Registration: CLOSED — tap to open";
 }
 
 /* ---------- Live room credentials ---------- */
-/* The public slots endpoint only says whether a room is live. The credentials come from
-   /api/room, which wants the Team ID and password issued at registration — so a random
-   visitor sees a locked card and nothing else.
+/* The public slots endpoint only says whether a room is live somewhere. The credentials
+   come from /api/room, which wants the Team ID and password issued at registration —
+   and only ever answers with the room of that team's own match.
 
    The server sends seconds-remaining rather than an expiry timestamp, so a phone with a
    wrong clock can't keep the room ID on screen after it has expired. We count down
@@ -239,11 +342,13 @@ function showRoomGate(message) {
   el("roomGate").hidden = false;
 }
 
-function showRoomCreds(room, team) {
+function showRoomCreds(room, team, matchName) {
   roomSecondsLeft = room.secondsLeft;
   el("roomId").textContent = room.id;
   el("roomPass").textContent = room.password;
-  el("roomTeam").textContent = team ? `Welcome, ${team}` : "";
+  el("roomTeam").textContent = team
+    ? `Welcome, ${team}` + (matchName ? ` · ${matchName}` : "")
+    : "";
   paintRoomTimer();
   el("roomTimer").hidden = false;
   el("roomGate").hidden = true;
@@ -265,8 +370,8 @@ async function applyRoom(roomLive) {
   if (!auth) return showRoomGate();
 
   try {
-    const { room, team } = await API.room(auth.teamId, auth.password);
-    if (room) showRoomCreds(room, team);
+    const { room, team, match } = await API.room(auth.teamId, auth.password);
+    if (room) showRoomCreds(room, team, match);
     else showRoomGate();
   } catch (err) {
     // Slots were reset, so these credentials will never work again — drop them
@@ -302,10 +407,10 @@ el("roomGate").addEventListener("submit", async (e) => {
   btn.textContent = "Checking…";
 
   try {
-    const { room, team } = await API.room(teamId, password);
+    const { room, team, match } = await API.room(teamId, password);
     saveAuth(teamId, password);
-    if (room) showRoomCreds(room, team);
-    else setUnlockAlert("The room hasn't been posted yet. Try again in a little while.");
+    if (room) showRoomCreds(room, team, match);
+    else setUnlockAlert("The room for your match hasn't been posted yet. Try again in a little while.");
   } catch (err) {
     setUnlockAlert(err.message);
   } finally {
@@ -322,10 +427,9 @@ el("roomLockBtn").addEventListener("click", () => {
 });
 
 /* ---------- Entry fee ---------- */
-/* The whole section only exists when an admin has configured a fee. A team unlocks it
-   with the same Team ID + password as the room card, so a squad that just registered is
-   already unlocked and lands straight on the Pay button. */
-let entryFee = null;
+/* The whole section only exists when at least one match has a fee. A team unlocks it
+   with the same Team ID + password as the room card — the server answers with *their
+   match's* fee, hold and status. */
 
 function setPayGateAlert(msg) {
   const alert = el("payGateAlert");
@@ -360,7 +464,9 @@ function showPayGate(message) {
 /* `info` is the /api/payment response. */
 function showPayPanel(info) {
   const status = info.status || "verified";
-  el("payTeam").textContent = info.team ? `${info.team} · ${info.teamId}` : "";
+  el("payTeam").textContent = [info.team, info.match?.name, info.teamId]
+    .filter(Boolean)
+    .join(" · ");
 
   const statusEl = el("payStatus");
   statusEl.classList.remove("is-pending", "is-submitted", "is-verified");
@@ -405,7 +511,8 @@ function showPayPanel(info) {
     holdEl.hidden = true;
   }
 
-  const fee = info.entryFee || entryFee;
+  const fee = info.entryFee;
+  if (fee) el("payAmount").textContent = "₹" + fee.amount;
   if (due && fee) {
     el("payVpa").textContent = fee.vpa;
     el("payAmt").textContent = String(fee.amount);
@@ -420,33 +527,23 @@ function showPayPanel(info) {
   el("payPanel").hidden = false;
 }
 
-/* Called on every slots poll. `fee` is null for a free tournament. */
-async function applyPayment(fee) {
-  entryFee = fee;
-  const section = el("paymentSection");
-
-  // The admin button names what is live right now. Without it a save looks like it
-  // did nothing — the fee is only visible to a logged-in team, never to the admin.
-  el("adminUpiBtn").textContent = fee
-    ? `💳 Entry Fee: ₹${fee.amount} · ${fee.vpa}`
-    : "💳 Entry Fee: OFF — tap to set";
-
-  // Say the price on the form itself — nobody should find out there's a fee only
-  // after they've filled the whole thing in.
-  const feeNote = el("formFeeNote");
-  if (fee) {
-    feeNote.textContent = `💳 Entry fee ₹${fee.amount} — pay by UPI right after you lock your slot.`;
-    feeNote.hidden = false;
-  } else {
-    feeNote.hidden = true;
+/* Section visibility on every slots poll: hidden only when no match charges a fee.
+   The headline amount is per match, so before a team logs in it shows the one fee
+   when all paid matches agree, and the range floor when they don't. */
+function syncPaymentSection() {
+  const amounts = [...new Set(matches.filter((m) => m.feeAmount > 0).map((m) => m.feeAmount))];
+  el("paymentSection").hidden = amounts.length === 0;
+  if (amounts.length && el("payPanel").hidden) {
+    el("payAmount").textContent =
+      amounts.length === 1 ? "₹" + amounts[0] : "₹" + Math.min(...amounts) + "+";
   }
+}
 
-  if (!fee) {
-    section.hidden = true;
-    return;
-  }
-  section.hidden = false;
-  el("payAmount").textContent = "₹" + fee.amount;
+/* Called on the slower poll and after a registration: refreshes the logged-in team's
+   own payment status from the server. */
+async function applyPayment() {
+  syncPaymentSection();
+  if (!matches.some((m) => m.feeAmount > 0)) return;
 
   const auth = savedAuth();
   if (!auth) return showPayGate();
@@ -454,7 +551,7 @@ async function applyPayment(fee) {
   try {
     showPayPanel(await API.payment(auth.teamId, auth.password));
   } catch (err) {
-    // Credentials that no longer work (slot cancelled, slots reset) shouldn't be
+    // Credentials that no longer work (slot cancelled, match reset) shouldn't be
     // retried on every poll.
     if (/incorrect|Unauthorized/i.test(err.message)) clearAuth();
     showPayGate(err.message);
@@ -551,7 +648,7 @@ el("payLockBtn").addEventListener("click", () => {
   showPayGate();
 });
 
-/* ---------- Match details ---------- */
+/* ---------- Site details ---------- */
 /* Field order here drives both the public tiles and the admin form. */
 const DETAIL_TILES = [
   { key: "date", label: "Date", icon: "📅" },
@@ -612,17 +709,15 @@ function renderDetails() {
 }
 
 async function loadDetails() {
-  let upi = null;
   try {
     const cfg = await API.config();
     tournament = cfg.tournament && typeof cfg.tournament === "object" ? cfg.tournament : {};
-    upi = cfg.upi || null;
   } catch (err) {
     console.error("Details fetch failed:", err);
     tournament = {};
   }
   renderDetails();
-  await applyPayment(upi);
+  await applyPayment();
 }
 
 /* ---------- Validation ---------- */
@@ -659,6 +754,15 @@ function collectMembers() {
 
 function validate(data) {
   let ok = true;
+
+  if (!data.matchId) {
+    el("matchChoiceError").textContent = "Pick which match you want to enter.";
+    el("matchField").classList.add("has-error");
+    ok = false;
+  } else {
+    el("matchChoiceError").textContent = "";
+    el("matchField").classList.remove("has-error");
+  }
 
   if (!data.teamName || data.teamName.length < 2) {
     setError("teamName", "Team name is required."); ok = false;
@@ -698,9 +802,11 @@ form.addEventListener("submit", async (e) => {
   setFormAlert("");
 
   const data = {
+    matchId: selectedMatchId,
     teamName: form.teamName.value.trim(),
     leaderName: form.leaderName.value.trim(),
     phone: form.phone.value.trim(),
+    members: collectMembers(),
   };
   if (!validate(data)) return;
 
@@ -717,7 +823,7 @@ form.addEventListener("submit", async (e) => {
     await renderSlots();
     // The team is now logged in, so refresh the entry-fee panel — it should be
     // unlocked and showing their Pay button by the time they close the modal.
-    await loadDetails();
+    await applyPayment();
     submitBtn.disabled = false;
     submitBtn.textContent = "Lock My Slot →";
   }
@@ -742,6 +848,9 @@ function normalizeWaLink(raw) {
 function showSuccess(teamName, res) {
   el("slotNumber").textContent = "#" + String(res.slot).padStart(2, "0");
   el("modalTeam").textContent = teamName;
+  el("modalMatch").textContent = res.match
+    ? res.match.name + (res.match.matchTime ? " · " + res.match.matchTime : "")
+    : "";
   el("credId").textContent = res.teamId;
   el("credPass").textContent = res.password;
 
@@ -778,6 +887,7 @@ function showSuccess(teamName, res) {
     el("modalClose").textContent = "Go to payment →";
     pendingPayment = true;
   } else {
+    el("modalTitle").lastChild.textContent = " is yours";
     payNote.hidden = true;
     el("modalClose").textContent = "Done";
     pendingPayment = false;
@@ -815,6 +925,16 @@ modal.querySelector(".modal__backdrop").addEventListener("click", closeModal);
 /* ---------- Admin panel (?admin=true) ---------- */
 let adminKey = null;
 
+/* The admin's view of every match: full config (fee included, so the editor can
+   prefill it) plus the live roster. Refreshed before every render that uses it. */
+let adminMatches = [];
+
+async function loadAdminMatches() {
+  const { matches: list } = await API.listRegistrations(adminKey);
+  adminMatches = Array.isArray(list) ? list : [];
+  return adminMatches;
+}
+
 if (new URLSearchParams(window.location.search).get("admin")) {
   const key = prompt("🔐 Admin Key:");
   if (key) {
@@ -823,7 +943,6 @@ if (new URLSearchParams(window.location.search).get("admin")) {
       .then(() => {
         adminKey = key;
         el("adminPanel").hidden = false;
-        updateAdminToggleLabel();
       })
       .catch((err) => alert("❌ " + err.message));
   }
@@ -836,6 +955,188 @@ el("adminBackdrop").addEventListener("click", () => {
   el("adminPanel").hidden = true;
 });
 
+/* ---------- Admin: match manager ---------- */
+const matchesModal = el("matchesModal");
+
+function matchAdminRow(m) {
+  const lastSlot = m.firstSlot + m.totalSlots - 1;
+  const fee = m.entryFee ? `₹${m.entryFee.amount}` : "Free";
+  const badge = m.registrationOpen
+    ? '<span class="reg-badge is-verified">OPEN</span>'
+    : '<span class="reg-badge is-pending">CLOSED</span>';
+
+  return `
+  <div style="border-bottom:1px solid var(--border);padding:12px 0">
+    <strong style="color:var(--accent)">${escapeHtml(m.name)}</strong>
+    <span style="color:var(--muted)">(${m.id})</span> ${badge}<br/>
+    ${m.matchTime ? "⏰ " + escapeHtml(m.matchTime) + " · " : ""}💳 ${fee} ·
+    👥 ${m.registrations.length}/${m.totalSlots} filled
+    (slots #${String(m.firstSlot).padStart(2, "0")}–#${String(lastSlot).padStart(2, "0")})
+    <div class="reg-acts">
+      <button class="reg-act ${m.registrationOpen ? "" : "reg-act--ok"}" data-act="toggle" data-id="${m.id}">
+        ${m.registrationOpen ? "🔒 Close Form" : "🟢 Open Form"}
+      </button>
+      <button class="reg-act" data-act="room" data-id="${m.id}">🎮 Room</button>
+      <button class="reg-act" data-act="edit" data-id="${m.id}">✏️ Edit</button>
+      <button class="reg-act reg-act--danger" data-act="reset" data-id="${m.id}">♻️ Reset Slots</button>
+      <button class="reg-act reg-act--danger" data-act="delete" data-id="${m.id}">🗑️ Delete</button>
+    </div>
+  </div>`;
+}
+
+async function renderMatchList() {
+  const box = el("matchList");
+  box.innerHTML = "<p style='text-align:center;color:var(--muted)'>Loading…</p>";
+
+  try {
+    await loadAdminMatches();
+    box.innerHTML = adminMatches.length
+      ? adminMatches.map(matchAdminRow).join("")
+      : "<p style='text-align:center;color:var(--muted)'>No matches yet — create the first one below.</p>";
+  } catch (err) {
+    box.innerHTML = `<p style="text-align:center;color:var(--danger)">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+el("adminMatchesBtn").addEventListener("click", async () => {
+  matchesModal.hidden = false;
+  await renderMatchList();
+});
+
+matchesModal.querySelector(".modal__close").addEventListener("click", () => {
+  matchesModal.hidden = true;
+});
+matchesModal.querySelector(".modal__backdrop").addEventListener("click", () => {
+  matchesModal.hidden = true;
+});
+
+/* Delegated: the rows are rebuilt after every action, so per-button listeners would
+   be re-bound each time. */
+el("matchList").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".reg-act");
+  if (!btn) return;
+
+  const act = btn.dataset.act;
+  const m = adminMatches.find((x) => x.id === btn.dataset.id);
+  if (!m) return;
+
+  try {
+    if (act === "toggle") {
+      if (
+        m.registrationOpen &&
+        !confirm(`Close registration for "${m.name}"? Its form option disappears for everyone; other matches stay open.`)
+      ) return;
+      btn.disabled = true;
+      await API.updateMatch({ id: m.id, registrationOpen: !m.registrationOpen }, adminKey);
+    } else if (act === "room") {
+      openRoomModal(m);
+      return;
+    } else if (act === "edit") {
+      openMatchEditor(m);
+      return;
+    } else if (act === "reset") {
+      const confirmText = prompt(`♻️ This deletes ALL registrations of "${m.name}" (${m.id}).\nType RESET to confirm:`);
+      if (confirmText !== "RESET") return;
+      btn.disabled = true;
+      await API.resetMatch(m.id, adminKey);
+    } else if (act === "delete") {
+      const confirmText = prompt(`🗑️ This deletes the match "${m.name}" (${m.id}) AND its registrations.\nType DELETE to confirm:`);
+      if (confirmText !== "DELETE") return;
+      btn.disabled = true;
+      await API.deleteMatch(m.id, adminKey);
+    } else {
+      return;
+    }
+
+    await renderMatchList();
+    await renderSlots();
+  } catch (err) {
+    alert("❌ " + err.message);
+    btn.disabled = false;
+  }
+});
+
+/* ---------- Admin: match editor (create + edit, fee included) ---------- */
+const matchEditModal = el("matchEditModal");
+const matchEditForm = el("matchEditForm");
+
+function setMatchEditAlert(msg) {
+  const alert = el("matchEditAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
+
+function openMatchEditor(m) {
+  setMatchEditAlert("");
+  matchEditForm.dataset.matchId = m ? m.id : "";
+  el("matchEditTitle").textContent = m ? `✏️ Edit ${m.name}` : "🆕 Create Match";
+  el("mName").value = m?.name || "";
+  el("mTime").value = m?.matchTime || "";
+  el("mTotalSlots").value = m ? m.totalSlots : "";
+  el("mFirstSlot").value = m ? m.firstSlot : "";
+  el("mWaLink").value = m?.whatsappLink || "";
+  // A merchant QR goes back in as the full link — prefilling the bare VPA would
+  // silently drop the signature on the next save.
+  el("mVpa").value = m?.entryFee ? payeeField(m.entryFee) : "";
+  el("mAmount").value = m?.entryFee?.amount || "";
+  el("mUpiPhone").value = m?.entryFee?.phone || "";
+  el("mPayee").value = m?.entryFee?.name || "";
+  el("matchSaveBtn").textContent = m ? "Save Changes" : "Create Match";
+  matchEditModal.hidden = false;
+}
+
+el("matchCreateBtn").addEventListener("click", () => openMatchEditor(null));
+
+matchEditModal.querySelector(".modal__close").addEventListener("click", () => {
+  matchEditModal.hidden = true;
+});
+matchEditModal.querySelector(".modal__backdrop").addEventListener("click", () => {
+  matchEditModal.hidden = true;
+});
+
+matchEditForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setMatchEditAlert("");
+
+  const payload = {
+    name: el("mName").value.trim(),
+    matchTime: el("mTime").value.trim(),
+    whatsappLink: el("mWaLink").value.trim(),
+    // Blank VPA and amount together mean "free match" — the server clears the fee.
+    upi: {
+      vpa: el("mVpa").value.trim(),
+      amount: el("mAmount").value.trim(),
+      name: el("mPayee").value.trim(),
+      phone: el("mUpiPhone").value.trim(),
+    },
+  };
+  // Left blank, the slot numbers keep their current (or default) values.
+  const totalSlots = el("mTotalSlots").value.trim();
+  if (totalSlots) payload.totalSlots = Number(totalSlots);
+  const firstSlot = el("mFirstSlot").value.trim();
+  if (firstSlot) payload.firstSlot = Number(firstSlot);
+
+  const saveBtn = el("matchSaveBtn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving…";
+
+  try {
+    const id = matchEditForm.dataset.matchId;
+    if (id) await API.updateMatch({ id, ...payload }, adminKey);
+    else await API.createMatch(payload, adminKey);
+
+    matchEditModal.hidden = true;
+    await renderMatchList();
+    await renderSlots();
+    alert(id ? "✅ Match updated" : "✅ Match created — its form is live");
+  } catch (err) {
+    setMatchEditAlert(err.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = matchEditForm.dataset.matchId ? "Save Changes" : "Create Match";
+  }
+});
+
 /* ---------- Admin: registrations ---------- */
 /* Registrations from before entry fees existed carry no status; they were never asked
    to pay, so show them as settled. */
@@ -845,7 +1146,7 @@ const PAY_BADGES = {
   verified: { label: "PAID", cls: "is-verified" },
 };
 
-function registrationRow(r) {
+function registrationRow(matchId, r) {
   const members = Array.isArray(r.members) ? r.members : [];
   const squad = members.length
     ? `Squad: ${members.map(escapeHtml).join(", ")}<br/>`
@@ -857,12 +1158,12 @@ function registrationRow(r) {
   // A team that has paid needs no verify button; one that hasn't can't be rejected.
   const actions = [
     status !== "verified"
-      ? `<button class="reg-act reg-act--ok" data-act="verify" data-slot="${r.slot_number}">✅ Verify</button>`
+      ? `<button class="reg-act reg-act--ok" data-act="verify" data-match="${matchId}" data-slot="${r.slot_number}">✅ Verify</button>`
       : "",
     status === "submitted"
-      ? `<button class="reg-act" data-act="reject" data-slot="${r.slot_number}">↩️ Reject UTR</button>`
+      ? `<button class="reg-act" data-act="reject" data-match="${matchId}" data-slot="${r.slot_number}">↩️ Reject UTR</button>`
       : "",
-    `<button class="reg-act reg-act--danger" data-act="cancel" data-slot="${r.slot_number}">🗑️ Cancel Slot</button>`,
+    `<button class="reg-act reg-act--danger" data-act="cancel" data-match="${matchId}" data-slot="${r.slot_number}">🗑️ Cancel Slot</button>`,
   ].join("");
 
   return `
@@ -882,10 +1183,23 @@ async function renderRegistrations() {
   regList.innerHTML = "<p style='text-align:center;color:var(--muted)'>Loading…</p>";
 
   try {
-    const { registrations } = await API.listRegistrations(adminKey);
-    regList.innerHTML = registrations.length
-      ? registrations.map(registrationRow).join("")
-      : "<p style='text-align:center;color:var(--muted)'>No registrations yet</p>";
+    await loadAdminMatches();
+    regList.innerHTML = adminMatches.length
+      ? adminMatches
+          .map((m) => {
+            const rows = m.registrations.length
+              ? m.registrations.map((r) => registrationRow(m.id, r)).join("")
+              : "<p style='color:var(--muted);padding:8px 0'>No registrations yet</p>";
+            return `
+              <h3 style="margin:16px 0 2px;color:var(--accent-2)">
+                ${escapeHtml(m.name)}
+                <span style="color:var(--muted);font-size:0.78em;font-weight:400">
+                  ${m.id}${m.matchTime ? " · " + escapeHtml(m.matchTime) : ""} · ${m.registrations.length}/${m.totalSlots}
+                </span>
+              </h3>${rows}`;
+          })
+          .join("")
+      : "<p style='text-align:center;color:var(--muted)'>No matches yet — create one in Manage Matches</p>";
   } catch (err) {
     regList.innerHTML = `<p style="text-align:center;color:var(--danger)">${escapeHtml(err.message)}</p>`;
   }
@@ -903,8 +1217,9 @@ el("regList").addEventListener("click", async (e) => {
   if (!btn) return;
 
   const act = btn.dataset.act;
+  const matchId = btn.dataset.match;
   const slot = Number(btn.dataset.slot);
-  const label = "#" + String(slot).padStart(2, "0");
+  const label = `${matchId} · #${String(slot).padStart(2, "0")}`;
 
   const confirms = {
     verify: `Mark the payment for slot ${label} as verified?`,
@@ -915,9 +1230,9 @@ el("regList").addEventListener("click", async (e) => {
 
   btn.disabled = true;
   try {
-    if (act === "verify") await API.verifyPayment(slot, adminKey);
-    else if (act === "reject") await API.rejectPayment(slot, adminKey);
-    else await API.cancelRegistration(slot, adminKey);
+    if (act === "verify") await API.verifyPayment(matchId, slot, adminKey);
+    else if (act === "reject") await API.rejectPayment(matchId, slot, adminKey);
+    else await API.cancelRegistration(matchId, slot, adminKey);
     await renderRegistrations();
     await renderSlots();
   } catch (err) {
@@ -933,29 +1248,7 @@ el("regModal").querySelector(".modal__backdrop").addEventListener("click", () =>
   el("regModal").hidden = true;
 });
 
-el("adminToggleBtn").addEventListener("click", async () => {
-  const next = !registrationOpen;
-  const btn = el("adminToggleBtn");
-
-  if (!next && !confirm("Close registration now? The form will disappear for everyone.")) {
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = "⏳ Saving…";
-  try {
-    await API.setRegistrationOpen(next, adminKey);
-    await renderSlots();
-    alert(next ? "✅ Registration is LIVE" : "🔒 Registration is CLOSED");
-  } catch (err) {
-    alert("❌ " + err.message);
-    updateAdminToggleLabel();
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-/* ---------- Admin: room ID & password ---------- */
+/* ---------- Admin: room ID & password (per match) ---------- */
 const roomModal = el("roomModal");
 const roomForm = el("roomForm");
 
@@ -969,13 +1262,16 @@ function closeRoomModal() {
   roomModal.hidden = true;
 }
 
-el("adminRoomBtn").addEventListener("click", () => {
+function openRoomModal(m) {
   setRoomAlert("");
   // Always start blank — a room ID is posted fresh each match, never edited.
   el("rId").value = "";
   el("rPass").value = "";
+  roomForm.dataset.matchId = m.id;
+  el("roomMatchName").textContent =
+    `${m.name}${m.matchTime ? " · " + m.matchTime : ""} (${m.id})`;
   roomModal.hidden = false;
-});
+}
 
 roomModal.querySelector(".modal__close").addEventListener("click", closeRoomModal);
 roomModal.querySelector(".modal__backdrop").addEventListener("click", closeRoomModal);
@@ -990,12 +1286,16 @@ roomForm.addEventListener("submit", async (e) => {
 
   try {
     await API.postRoom(
-      { id: el("rId").value.trim(), password: el("rPass").value.trim() },
+      {
+        matchId: roomForm.dataset.matchId,
+        id: el("rId").value.trim(),
+        password: el("rPass").value.trim(),
+      },
       adminKey
     );
     await renderSlots();
     closeRoomModal();
-    alert("✅ Room details live for 10 minutes");
+    alert("✅ Room details live for 10 minutes — visible only to this match's verified teams");
   } catch (err) {
     setRoomAlert(err.message);
   } finally {
@@ -1005,11 +1305,11 @@ roomForm.addEventListener("submit", async (e) => {
 });
 
 el("roomClearBtn").addEventListener("click", async () => {
-  if (!confirm("Remove the room details from the website right now?")) return;
+  if (!confirm("Remove this match's room details from the website right now?")) return;
 
   try {
-    // An explicit null tells the server to drop the key instead of writing one.
-    await API.postRoom(null, adminKey);
+    // An explicit remove tells the server to drop the key instead of writing one.
+    await API.postRoom({ matchId: roomForm.dataset.matchId, remove: true }, adminKey);
     await renderSlots();
     closeRoomModal();
     alert("✅ Room details removed");
@@ -1018,79 +1318,7 @@ el("roomClearBtn").addEventListener("click", async () => {
   }
 });
 
-/* ---------- Admin: entry fee ---------- */
-const upiModal = el("upiModal");
-const upiForm = el("upiForm");
-
-function setUpiAlert(msg) {
-  const alert = el("upiAlert");
-  alert.textContent = msg || "";
-  alert.hidden = !msg;
-}
-
-function closeUpiModal() {
-  upiModal.hidden = true;
-}
-
-el("adminUpiBtn").addEventListener("click", () => {
-  setUpiAlert("");
-  // Prefill from what's live so a small edit doesn't mean retyping the UPI ID.
-  // A merchant QR goes back in as the full link — prefilling the bare VPA would
-  // silently drop the signature on the next save.
-  el("uVpa").value = entryFee ? payeeField(entryFee) : "";
-  el("uName").value = entryFee?.name || "";
-  el("uAmount").value = entryFee?.amount || "";
-  el("uPhone").value = entryFee?.phone || "";
-  upiModal.hidden = false;
-});
-
-upiModal.querySelector(".modal__close").addEventListener("click", closeUpiModal);
-upiModal.querySelector(".modal__backdrop").addEventListener("click", closeUpiModal);
-
-upiForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  setUpiAlert("");
-
-  const saveBtn = el("upiSaveBtn");
-  saveBtn.disabled = true;
-  saveBtn.textContent = "Saving…";
-
-  try {
-    await API.setUpi(
-      {
-        vpa: el("uVpa").value.trim(),
-        name: el("uName").value.trim(),
-        amount: Number(el("uAmount").value.trim()),
-        phone: el("uPhone").value.trim(),
-      },
-      adminKey
-    );
-    await loadDetails();
-    closeUpiModal();
-    alert("✅ Entry fee is live. New registrations are confirmed only after payment.");
-  } catch (err) {
-    setUpiAlert(err.message);
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = "Save Entry Fee";
-  }
-});
-
-el("upiClearBtn").addEventListener("click", async () => {
-  if (!confirm("Remove the entry fee? All slots become free after this.")) return;
-
-  try {
-    // An explicit null drops the key — that's how the tournament goes back to free.
-    await API.setUpi(null, adminKey);
-    await loadDetails();
-    closeUpiModal();
-    alert("✅ The tournament is now free");
-  } catch (err) {
-    setUpiAlert(err.message);
-  }
-});
-
-/* ---------- Admin: match details editor ---------- */
+/* ---------- Admin: site details editor ---------- */
 const detailsModal = el("detailsModal");
 const detailsForm = el("detailsForm");
 
@@ -1141,24 +1369,12 @@ detailsForm.addEventListener("submit", async (e) => {
     tournament = res.tournament || {};
     renderDetails();
     closeDetailsModal();
-    alert("✅ Match details updated");
+    alert("✅ Site details updated");
   } catch (err) {
     setDetailsAlert(err.message);
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = "Save Details";
-  }
-});
-
-el("adminLinkBtn").addEventListener("click", async () => {
-  const newLink = prompt("New WhatsApp Community Link:");
-  if (!newLink) return;
-
-  try {
-    await API.updateLink(newLink, adminKey);
-    alert("✅ Link updated for everyone:\n\n" + newLink);
-  } catch (err) {
-    alert("❌ " + err.message);
   }
 });
 
@@ -1185,20 +1401,6 @@ el("adminTestNotifyBtn").addEventListener("click", async () => {
   }
 });
 
-el("adminResetBtn").addEventListener("click", async () => {
-  const confirmText = prompt("🗑️ This deletes ALL registrations.\nType RESET to confirm:");
-  if (confirmText !== "RESET") return;
-
-  try {
-    await API.resetSlots(adminKey);
-    await renderSlots();
-    alert("✅ All slots reset to 0/16");
-    el("adminPanel").hidden = true;
-  } catch (err) {
-    alert("❌ " + err.message);
-  }
-});
-
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -1207,9 +1409,13 @@ function escapeHtml(str) {
 
 /* ---------- Init ---------- */
 el("year").textContent = new Date().getFullYear();
-renderSlots();
-loadDetails();
-setInterval(renderSlots, 10000); // keep the counter fresh
+// Matches first, then details: applyPayment inside loadDetails needs the match list
+// to know whether any match charges a fee at all.
+(async () => {
+  await renderSlots();
+  await loadDetails();
+})();
+setInterval(renderSlots, 10000); // keep the counters and boards fresh
 // Slower than the slot poll: this also re-checks the team's payment status, and an
 // admin verifying a payment isn't something that needs second-by-second freshness.
 setInterval(loadDetails, 30000);

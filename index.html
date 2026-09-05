@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0b0c08" />
   <title>Fragify Esports — BGMI Tournament Registration</title>
-  <meta name="description" content="Register your squad for the Fragify Esports BGMI tournament. Only 16 slots. First come, first frag." />
+  <meta name="description" content="Register your squad for the Fragify Esports BGMI tournaments. Pick your match time — limited slots per match. First come, first frag." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230b0c08'/><g fill='none' stroke='%23ff9b21' stroke-width='4' stroke-linecap='round'><circle cx='32' cy='32' r='15'/><path d='M32 7v11M32 46v11M7 32h11M46 32h11'/></g><circle cx='32' cy='32' r='4' fill='%23ffd54a'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -63,19 +63,19 @@
         <span class="accent">CLAIM YOUR SLOT.</span>
       </h1>
       <p class="hero__sub">
-        Only <strong>16 teams</strong> drop in. Registration closes the moment the last
-        slot is gone. Lock in your squad, get your slot number, and join the WhatsApp
-        community for your room ID &amp; password. <strong>Winner Winner Chicken Dinner</strong> awaits. 🍗
+        Multiple matches, <strong>limited slots each</strong>. Pick your match time,
+        lock in your squad, get your slot number, and join the WhatsApp community for
+        your room ID &amp; password. <strong>Winner Winner Chicken Dinner</strong> awaits. 🍗
       </p>
 
-      <!-- SLOTS COUNTER -->
+      <!-- SLOTS COUNTER (all matches combined) -->
       <div class="slots">
         <div class="slots__meter">
           <div class="slots__fill" id="slotsFill"></div>
         </div>
         <div class="slots__labels">
-          <span><strong id="slotsTaken">0</strong> / <span id="slotsTotal">16</span> slots filled</span>
-          <span class="slots__left" id="slotsLeft">16 left</span>
+          <span><strong id="slotsTaken">0</strong> / <span id="slotsTotal">0</span> slots filled</span>
+          <span class="slots__left" id="slotsLeft">—</span>
         </div>
       </div>
 
@@ -93,8 +93,8 @@
     <section class="cards">
       <div class="card">
         <div class="card__icon">🪖</div>
-        <h3>16 Squads Only</h3>
-        <p>Hard cap. When the 16th squad registers, the lobby auto-locks. No exceptions.</p>
+        <h3>Limited Slots</h3>
+        <p>Every match has a hard cap. When the last squad registers, that lobby auto-locks. No exceptions.</p>
       </div>
       <div class="card">
         <div class="card__icon">🎯</div>
@@ -125,7 +125,7 @@
           <div class="room__gate-fields">
             <div class="field">
               <label for="unlockId">Team ID</label>
-              <input type="text" id="unlockId" placeholder="FRG-006" autocomplete="off" />
+              <input type="text" id="unlockId" placeholder="FRG-M1-006" autocomplete="off" />
             </div>
             <div class="field">
               <label for="unlockPass">Password</label>
@@ -175,7 +175,7 @@
           <div class="pay__gate-fields">
             <div class="field">
               <label for="payId">Team ID</label>
-              <input type="text" id="payId" placeholder="FRG-006" autocomplete="off" />
+              <input type="text" id="payId" placeholder="FRG-M1-006" autocomplete="off" />
             </div>
             <div class="field">
               <label for="payPass">Password</label>
@@ -279,13 +279,14 @@
       </div>
     </section>
 
-    <!-- TEAMBOARD — public roster. Names appear only once the entry fee is settled. -->
-    <section class="board" id="boardSection">
+    <!-- TEAMBOARDS — one public roster per match. Names appear only once the entry
+         fee is settled. -->
+    <section class="board" id="boardSection" hidden>
       <div class="board__head">
         <h2>Confirmed Teams</h2>
         <p id="boardSub">A team's name appears on its slot as soon as the entry fee is verified.</p>
       </div>
-      <div class="board__grid" id="boardGrid"></div>
+      <div id="boardsWrap"></div>
     </section>
 
     <!-- REGISTRATION -->
@@ -296,6 +297,14 @@
       </div>
 
       <form id="regForm" class="form" novalidate>
+        <!-- One card per match that is open and has seats left. app.js rebuilds this
+             on every poll; picking one decides which lobby the slot comes from. -->
+        <div class="field" id="matchField">
+          <label>Choose Your Match <span class="req">*</span></label>
+          <div class="match-choice" id="matchChoice"></div>
+          <small class="field__error" id="matchChoiceError"></small>
+        </div>
+
         <div class="field">
           <label for="teamName">Team Name <span class="req">*</span></label>
           <input type="text" id="teamName" name="teamName" placeholder="e.g. Team Phantom" autocomplete="off" required />
@@ -355,7 +364,7 @@
       <div class="closed" id="closedState" hidden>
         <div class="closed__icon">🔒</div>
         <h2 id="closedTitle">Registration Closed</h2>
-        <p id="closedMsg">All 16 slots are filled. Follow us for the next season drop.</p>
+        <p id="closedMsg">All slots are filled. Follow us for the next match drop.</p>
       </div>
     </section>
 
@@ -409,11 +418,12 @@
       <div class="modal__badge">✅ You're In!</div>
       <h2 id="modalTitle">Slot <span class="accent" id="slotNumber">#00</span> is yours</h2>
       <p class="modal__team" id="modalTeam">Team Phantom</p>
+      <p class="modal__match" id="modalMatch"></p>
 
       <div class="creds">
         <div class="creds__row">
           <span class="creds__label">Team ID</span>
-          <span class="creds__value" id="credId">FRG-000</span>
+          <span class="creds__value" id="credId">FRG-M1-000</span>
         </div>
         <div class="creds__row">
           <span class="creds__label">Password</span>
@@ -455,25 +465,24 @@
     <div class="admin-card">
       <h2>🔐 Admin Panel</h2>
       <div class="admin-menu">
-        <button class="admin-btn" id="adminToggleBtn">⏳ Registration: …</button>
-        <button class="admin-btn" id="adminRoomBtn">🎮 Post Room ID &amp; Pass</button>
-        <button class="admin-btn" id="adminDetailsBtn">🏆 Edit Match Details</button>
-        <button class="admin-btn" id="adminUpiBtn">💳 Entry Fee: …</button>
+        <!-- Registration toggles, rooms, fees, links and resets are all per match
+             now — they live inside Manage Matches. -->
+        <button class="admin-btn" id="adminMatchesBtn">🎮 Manage Matches</button>
+        <button class="admin-btn" id="adminDetailsBtn">🏆 Edit Site Details</button>
         <button class="admin-btn" id="adminViewBtn">📋 View All Registrations</button>
-        <button class="admin-btn" id="adminLinkBtn">🔗 Update WhatsApp Link</button>
         <button class="admin-btn" id="adminTestNotifyBtn">🔔 Test UTR Alert</button>
-        <button class="admin-btn admin-btn--danger" id="adminResetBtn">🗑️ Reset All Slots</button>
       </div>
       <button class="admin-close" id="adminCloseBtn">Close</button>
     </div>
   </div>
 
-  <!-- ROOM ID EDITOR (admin) -->
+  <!-- ROOM ID EDITOR (admin, one match at a time) -->
   <div class="modal" id="roomModal" hidden>
     <div class="modal__backdrop"></div>
     <div class="modal__card modal__card--wide">
       <h2>🎮 Post Room ID &amp; Pass</h2>
-      <p class="modal__sub">Visible on the website for 10 minutes, then removed automatically.</p>
+      <p class="modal__sub" id="roomMatchName"></p>
+      <p class="modal__sub">Visible to this match's verified teams for 10 minutes, then removed automatically.</p>
 
       <form id="roomForm" class="details-form">
         <div class="details-form__grid">
@@ -501,59 +510,91 @@
     </div>
   </div>
 
-  <!-- ENTRY FEE EDITOR (admin) -->
-  <div class="modal" id="upiModal" hidden>
+  <!-- MATCH MANAGER (admin) — every match with its own toggle, room, edit and reset -->
+  <div class="modal" id="matchesModal" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__card modal__card--wide" style="text-align:left">
+      <h2 style="text-align:center">🎮 Manage Matches</h2>
+      <p class="modal__sub" style="text-align:center">
+        Each match has its own form, slots, entry fee, room and WhatsApp invite.
+        Several can be open at the same time.
+      </p>
+      <div id="matchList" style="max-height:380px;overflow-y:auto;margin:16px 0"></div>
+      <button class="btn btn--primary" id="matchCreateBtn" style="width:100%">+ Create New Match</button>
+      <button class="modal__close">Close</button>
+    </div>
+  </div>
+
+  <!-- MATCH EDITOR (admin) — create or edit one match, entry fee included -->
+  <div class="modal" id="matchEditModal" hidden>
     <div class="modal__backdrop"></div>
     <div class="modal__card modal__card--wide">
-      <h2>💳 Entry Fee &amp; UPI</h2>
-      <p class="modal__sub">Once a fee is set, new slots are confirmed only after payment.</p>
+      <h2 id="matchEditTitle">🆕 Create Match</h2>
+      <p class="modal__sub">Leave the fee blank for a free match — slots then confirm instantly.</p>
 
-      <form id="upiForm" class="details-form">
+      <form id="matchEditForm" class="details-form">
         <div class="details-form__grid">
+          <div class="field">
+            <label for="mName">Match Name</label>
+            <input type="text" id="mName" name="name" placeholder="e.g. Evening Scrims" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="mTime">Match Time</label>
+            <input type="text" id="mTime" name="matchTime" placeholder="e.g. 6:00 PM" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="mTotalSlots">Team Slots</label>
+            <input type="text" id="mTotalSlots" name="totalSlots" placeholder="16" inputmode="numeric" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="mFirstSlot">First Slot Number</label>
+            <input type="text" id="mFirstSlot" name="firstSlot" placeholder="6" inputmode="numeric" autocomplete="off" />
+            <p class="field__help">Slots below this stay with the hosts. First slot 6 with 16 teams fills #06–#21.</p>
+          </div>
           <div class="field field--full">
-            <label for="uVpa">Your UPI ID <em>or full QR link</em></label>
-            <input type="text" id="uVpa" name="vpa" placeholder="9217191222@ybl — or upi://pay?pa=...&amp;sign=..." autocomplete="off" />
+            <label for="mWaLink">WhatsApp Invite Link (given after verification)</label>
+            <input type="text" id="mWaLink" name="whatsappLink" placeholder="https://chat.whatsapp.com/…" autocomplete="off" />
+          </div>
+          <div class="field field--full">
+            <label for="mVpa">Entry Fee — UPI ID <em>or full QR link</em> (blank = free)</label>
+            <input type="text" id="mVpa" name="vpa" placeholder="9217191222@ybl — or upi://pay?pa=...&amp;sign=..." autocomplete="off" />
             <p class="field__help">
               Using a merchant QR? The UPI ID alone is not enough — you also need the
-              <strong>sign</strong> that comes with the QR, otherwise the app says
-              "receiver is not accepting payments on this specific UPI ID". Scan your own
-              QR with any QR-scanner app and paste the full <code>upi://pay?...</code>
-              text here.
+              <strong>sign</strong> that comes with the QR. Scan your own QR with any
+              QR-scanner app and paste the full <code>upi://pay?...</code> text here.
             </p>
           </div>
           <div class="field">
-            <label for="uAmount">Entry Fee (₹)</label>
-            <input type="text" id="uAmount" name="amount" placeholder="40" inputmode="numeric" autocomplete="off" />
+            <label for="mAmount">Entry Fee (₹)</label>
+            <input type="text" id="mAmount" name="amount" placeholder="40" inputmode="numeric" autocomplete="off" />
           </div>
           <div class="field">
-            <label for="uPhone">UPI Mobile Number (optional)</label>
-            <input type="tel" id="uPhone" name="phone" placeholder="10-digit number" inputmode="numeric" maxlength="10" autocomplete="off" />
+            <label for="mUpiPhone">UPI Mobile Number (optional)</label>
+            <input type="tel" id="mUpiPhone" name="phone" placeholder="10-digit number" inputmode="numeric" maxlength="10" autocomplete="off" />
           </div>
           <div class="field field--full">
-            <label for="uName">Payee Name (shown in the UPI app)</label>
-            <input type="text" id="uName" name="name" placeholder="Fragify Esports" autocomplete="off" />
+            <label for="mPayee">Payee Name (shown in the UPI app)</label>
+            <input type="text" id="mPayee" name="payee" placeholder="Fragify Esports" autocomplete="off" />
           </div>
         </div>
 
-        <p class="form__alert" id="upiAlert" role="alert" hidden></p>
+        <p class="form__alert" id="matchEditAlert" role="alert" hidden></p>
 
-        <button type="submit" class="btn btn--primary details-form__submit" id="upiSaveBtn">
-          Save Entry Fee
+        <button type="submit" class="btn btn--primary details-form__submit" id="matchSaveBtn">
+          Save Match
         </button>
       </form>
 
-      <button class="admin-btn admin-btn--danger room-form__clear" id="upiClearBtn">
-        Make tournament free
-      </button>
       <button class="modal__close">Cancel</button>
     </div>
   </div>
 
-  <!-- MATCH DETAILS EDITOR (admin) -->
+  <!-- SITE DETAILS EDITOR (admin) — the public info tiles, prizes and rules shown to
+       everyone regardless of match -->
   <div class="modal" id="detailsModal" hidden>
     <div class="modal__backdrop"></div>
     <div class="modal__card modal__card--wide">
-      <h2>🏆 Match Details</h2>
+      <h2>🏆 Site Details</h2>
       <p class="modal__sub">Any field you leave blank will not appear on the website.</p>
 
       <form id="detailsForm" class="details-form">

@@ -1,15 +1,14 @@
 import { kv } from "@vercel/kv";
-
-const TOTAL_SLOTS = 16;
-const MAX_MEMBERS = 4;
-
-/* Slot numbers run from FIRST_SLOT upwards — 1..FIRST_SLOT-1 are held back and
-   never handed out. The cap is still TOTAL_SLOTS registrations, so with a first
-   slot of 6 the lobby fills #06 through #21. */
-const FIRST_SLOT = 6;
-
-/* How long an unpaid team keeps its seat before the slot goes back into the pool. */
-const HOLD_MINUTES = 20;
+import {
+  MAX_MEMBERS,
+  HOLD_MINUTES,
+  matchKeys,
+  getMatch,
+  getAllMatches,
+  activeRegistrations,
+  nextFreeSlot,
+  isRoomLive,
+} from "../lib/matches.js";
 
 function genPassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -46,56 +45,9 @@ function cleanMembers(raw) {
   return { members };
 }
 
-/* A team that hasn't paid holds its seat for HOLD_MINUTES and then loses it. A team
-   that has submitted a UTR is waiting on *us*, not the other way round, so it never
-   expires — only an admin clears it. */
-function isExpiredHold(r) {
-  return (
-    r?.payment_status === "pending" &&
-    typeof r.payment_deadline === "number" &&
-    r.payment_deadline < Date.now()
-  );
-}
-
-/* The live roster, with lapsed holds swept out. There is no cron here, so expiry
-   happens lazily on read — and only writes back when something actually changed. */
-async function activeRegistrations() {
-  const list = await kv.get("registrations:list");
-  if (!Array.isArray(list)) return [];
-
-  const live = list.filter((r) => !isExpiredHold(r));
-  if (live.length === list.length) return list;
-
-  await kv.set("registrations:list", live);
-  for (const dropped of list.filter(isExpiredHold)) {
-    await kv.del(`registrations:${dropped.slot_number}`);
-    if (dropped.phone) await kv.del(`registrations:phone:${dropped.phone}`);
-  }
-  return live;
-}
-
-/* Seats are handed out by filling the lowest free number, never by counting rows.
-   Counting would give a cancelled team's number to the next registration, and two
-   teams would end up sharing a slot and a Team ID. */
-function nextFreeSlot(list) {
-  const taken = new Set(list.map((r) => Number(r.slot_number)));
-  for (let slot = FIRST_SLOT; slot < FIRST_SLOT + TOTAL_SLOTS; slot++) {
-    if (!taken.has(slot)) return slot;
-  }
-  return null;
-}
-
-/* Entry fee, if an admin has configured one. No config at all means a free
-   tournament, and registrations are confirmed on the spot. */
-async function getEntryFee() {
-  const upi = await kv.get("config:upi");
-  if (!upi || !upi.vpa || !(upi.amount > 0)) return null;
-  return upi;
-}
-
-/* The public teamboard. This endpoint needs no credentials, so it carries the two
-   things a spectator has any business seeing — the seat and, once the entry fee is
-   settled, who holds it. Never the phone number, leader, Team ID or password.
+/* The public teamboard of one match. This endpoint needs no credentials, so it carries
+   the two things a spectator has any business seeing — the seat and, once the entry
+   fee is settled, who holds it. Never the phone number, leader, Team ID or password.
 
    A seat that is still paying shows as occupied but nameless: the slot is genuinely
    taken, yet naming a team before its fee clears would put squads on the board that
@@ -114,47 +66,45 @@ function publicBoard(list) {
     .sort((a, b) => a.slot - b.slot);
 }
 
-/* Admins can close registration early from the panel. The key is absent until the
-   toggle is first used, so "not set" means open. */
-async function isRegistrationOpen() {
-  const stored = await kv.get("config:registration_open");
-  return stored === null || stored === undefined ? true : Boolean(stored);
-}
-
-/* Whether an admin has a room posted right now. Deliberately just a boolean — the
-   credentials themselves are behind /api/room, which checks the team's Team ID and
-   password first. This endpoint is public, so it must not leak them. */
-async function isRoomLive() {
-  const room = await kv.get("config:room");
-  return Boolean(room && room.id && room.expiresAt > Date.now());
-}
-
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  // Slot counts and the teamboard go stale within seconds; never serve them cached.
+  // Slot counts and the teamboards go stale within seconds; never serve them cached.
   res.setHeader("Cache-Control", "no-store");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
   if (req.method === "GET") {
     try {
-      const list = await activeRegistrations();
-      return res.status(200).json({
-        taken: list.length,
-        total: TOTAL_SLOTS,
-        open: await isRegistrationOpen(),
-        roomLive: await isRoomLive(),
-        teams: publicBoard(list),
-      });
+      /* One public payload for every match at once, so the page needs a single fetch
+         to draw every board and every form option. Per-match fees travel as a bare
+         amount — the VPA and QR parameters only matter to a team that registered, and
+         they get those from /api/register (POST) and /api/payment. */
+      const matches = [];
+      for (const match of await getAllMatches()) {
+        const list = await activeRegistrations(match.id);
+        matches.push({
+          id: match.id,
+          name: match.name,
+          matchTime: match.matchTime,
+          totalSlots: match.totalSlots,
+          firstSlot: match.firstSlot,
+          taken: list.length,
+          open: match.registrationOpen,
+          roomLive: await isRoomLive(match.id),
+          feeAmount: match.entryFee ? match.entryFee.amount : null,
+          teams: publicBoard(list),
+        });
+      }
+      return res.status(200).json({ matches });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   }
 
   if (req.method === "POST") {
-    const { teamName, leaderName, phone, members: rawMembers } = req.body || {};
+    const { matchId, teamName, leaderName, phone, members: rawMembers } = req.body || {};
 
     // Server-side validation (frontend validation is not enough)
     if (!teamName || teamName.trim().length < 2) {
@@ -173,37 +123,46 @@ export default async function handler(req, res) {
     }
 
     try {
-      // An admin can shut the door before the slots run out.
-      if (!(await isRegistrationOpen())) {
-        return res.status(403).json({ error: "Registration is currently closed" });
+      const match = await getMatch(matchId);
+      if (!match) {
+        return res.status(400).json({ error: "Pick which match you want to enter" });
       }
 
-      // Duplicate phone check — one number, one registration.
-      const dupPhone = await kv.get(`registrations:phone:${digits}`);
+      // An admin can shut one match's door while the others stay open.
+      if (!match.registrationOpen) {
+        return res.status(403).json({ error: "Registration for this match is closed" });
+      }
+
+      // Duplicate phone check — one number, one registration *per match*. The same
+      // squad entering another match is fine; that is the point of multiple matches.
+      const dupPhone = await kv.get(matchKeys.phone(match.id, digits));
       if (dupPhone) {
-        return res.status(409).json({ error: "This number is already registered" });
+        return res.status(409).json({ error: "This number is already registered for this match" });
       }
 
-      // Duplicate team name check. The list is capped at TOTAL_SLOTS entries, so
-      // comparing in JS is cheap.
-      const regList = await activeRegistrations();
+      // Duplicate team name check, within this match only. The list is capped at
+      // the match's slot count, so comparing in JS is cheap.
+      const regList = await activeRegistrations(match.id);
       const normalizedTeamName = normalizeTeamName(teamName);
       if (regList.some((r) => normalizeTeamName(r.team_name) === normalizedTeamName)) {
-        return res.status(409).json({ error: "This team name is already registered" });
+        return res.status(409).json({ error: "This team name is already registered for this match" });
       }
 
-      const slot = nextFreeSlot(regList);
+      const slot = nextFreeSlot(match, regList);
       if (slot === null) {
-        return res.status(409).json({ error: "Registration is full" });
+        return res.status(409).json({ error: "This match is full" });
       }
 
-      const teamId = "FRG-" + String(slot).padStart(3, "0");
+      /* The match id lives inside the Team ID because slot numbers repeat across
+         matches — #06 exists in every lobby, so "FRG-006" alone names nobody. */
+      const teamId = `FRG-${match.id}-${String(slot).padStart(3, "0")}`;
       const password = genPassword();
 
       // A configured entry fee puts the team on a hold until the money is verified.
-      const entryFee = await getEntryFee();
+      const entryFee = match.entryFee;
 
       const registration = {
+        match_id: match.id,
         slot_number: slot,
         team_name: teamName.trim(),
         leader_name: leaderName.trim(),
@@ -218,9 +177,9 @@ export default async function handler(req, res) {
       };
 
       regList.push(registration);
-      await kv.set("registrations:list", regList);
-      await kv.set(`registrations:phone:${digits}`, slot);
-      await kv.set(`registrations:${slot}`, registration);
+      await kv.set(matchKeys.list(match.id), regList);
+      await kv.set(matchKeys.phone(match.id, digits), slot);
+      await kv.set(matchKeys.slot(match.id, slot), registration);
 
       // null when no community link is configured — the UI then tells the team the
       // link is coming rather than rendering a button that goes nowhere.
@@ -228,7 +187,7 @@ export default async function handler(req, res) {
       // A team that still owes the entry fee gets nothing here at all: the invite is
       // the one thing an unpaid squad could take and walk away with, so it is held
       // back until an admin verifies the payment and /api/payment hands it over.
-      const waLink = entryFee ? null : (await kv.get("config:whatsapp_link")) || null;
+      const waLink = entryFee ? null : match.whatsappLink;
 
       return res.status(200).json({
         ok: true,
@@ -236,7 +195,8 @@ export default async function handler(req, res) {
         teamId: teamId,
         password: password,
         waLink: waLink,
-        // Present only for a paid tournament — the UI then sends the team to the
+        match: { id: match.id, name: match.name, matchTime: match.matchTime },
+        // Present only for a paid match — the UI then sends the team to the
         // entry-fee section instead of declaring the slot confirmed. The VPA rides
         // along so the confirmation can offer a Pay button without a second fetch.
         paymentDue: entryFee

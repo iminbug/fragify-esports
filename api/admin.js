@@ -1,20 +1,14 @@
-import { kv } from "@vercel/kv";
-import { writeRegistration } from "../lib/team-auth.js";
-
-/* Removes a team entirely and frees its seat. All three keys have to go, especially the
-   phone one — otherwise that number could never register again. */
-async function cancelRegistration(slot) {
-  const list = (await kv.get("registrations:list")) || [];
-  const target = Array.isArray(list)
-    ? list.find((r) => Number(r?.slot_number) === slot)
-    : null;
-  if (!target) return false;
-
-  await kv.set("registrations:list", list.filter((r) => Number(r?.slot_number) !== slot));
-  await kv.del(`registrations:${slot}`);
-  if (target.phone) await kv.del(`registrations:phone:${target.phone}`);
-  return true;
-}
+import {
+  HOLD_MINUTES,
+  normalizeMatchId,
+  getMatch,
+  getAllMatches,
+  activeRegistrations,
+  writeRegistration,
+  cancelRegistration,
+  resetMatchRegistrations,
+} from "../lib/matches.js";
+import { findRegistration } from "../lib/team-auth.js";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -26,7 +20,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { action, slot: rawSlot, adminKey } = req.body || {};
+  const { action, matchId: rawMatchId, slot: rawSlot, adminKey } = req.body || {};
 
   // Distinguish "server has no key configured" from "wrong key" — otherwise a
   // missing env var looks identical to a typo and is painful to diagnose.
@@ -38,18 +32,29 @@ export default async function handler(req, res) {
   }
 
   try {
+    /* Everything about every match in one payload: the full config (fee included, so
+       the editor can prefill it) plus the live roster. Admin-only, hence the key check
+       above — this is the one response that carries phones and passwords. */
     if (action === "list") {
-      const regList = (await kv.get("registrations:list")) || [];
-      return res.status(200).json({ registrations: regList });
+      const matches = [];
+      for (const match of await getAllMatches()) {
+        matches.push({
+          ...match,
+          registrations: await activeRegistrations(match.id),
+        });
+      }
+      return res.status(200).json({ matches });
+    }
+
+    // Everything below acts on one match.
+    const matchId = normalizeMatchId(rawMatchId);
+    const match = matchId ? await getMatch(matchId) : null;
+    if (!match) {
+      return res.status(400).json({ error: "A match id is required" });
     }
 
     if (action === "reset") {
-      const regList = (await kv.get("registrations:list")) || [];
-      for (const reg of regList) {
-        await kv.del(`registrations:phone:${reg.phone}`);
-        await kv.del(`registrations:${reg.slot_number}`);
-      }
-      await kv.del("registrations:list");
+      await resetMatchRegistrations(match.id);
       return res.status(200).json({ ok: true });
     }
 
@@ -61,16 +66,16 @@ export default async function handler(req, res) {
       }
 
       if (action === "cancel") {
-        const removed = await cancelRegistration(slot);
+        const removed = await cancelRegistration(match.id, slot);
         if (!removed) return res.status(404).json({ error: "No team in that slot" });
         return res.status(200).json({ ok: true });
       }
 
-      const registration = await kv.get(`registrations:${slot}`);
+      const registration = await findRegistration(match.id, slot);
       if (!registration) return res.status(404).json({ error: "No team in that slot" });
 
       if (action === "verify") {
-        await writeRegistration(slot, {
+        await writeRegistration(match.id, slot, {
           ...registration,
           payment_status: "verified",
           payment_deadline: null,
@@ -79,11 +84,11 @@ export default async function handler(req, res) {
       } else {
         // Rejecting hands the slot back to the team rather than deleting it — the
         // usual cause is a mistyped UTR, and re-registering would lose their squad.
-        await writeRegistration(slot, {
+        await writeRegistration(match.id, slot, {
           ...registration,
           payment_status: "pending",
           utr: null,
-          payment_deadline: Date.now() + 20 * 60 * 1000,
+          payment_deadline: Date.now() + HOLD_MINUTES * 60 * 1000,
         });
       }
       return res.status(200).json({ ok: true });
