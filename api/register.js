@@ -94,6 +94,7 @@ export default async function handler(req, res) {
           open: match.registrationOpen,
           roomLive: await isRoomLive(match.id),
           feeAmount: match.entryFee ? match.entryFee.amount : null,
+          qrUrl: match.entryFee?.qrUrl || null,
           teams: publicBoard(list),
         });
       }
@@ -205,6 +206,7 @@ export default async function handler(req, res) {
               holdMinutes: HOLD_MINUTES,
               vpa: entryFee.vpa,
               name: entryFee.name,
+              qrUrl: entryFee.qrUrl || null,
               extra: entryFee.extra || {},
             }
           : null,

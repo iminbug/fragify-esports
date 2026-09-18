@@ -35,9 +35,8 @@ const API = {
   config: () => apiGet("/api/config"),
   register: (data) => apiPost("/api/register", data),
   room: (teamId, password) => apiPost("/api/room", { teamId, password }),
-  /* No UTR = "what's my status?"; a UTR = "here's my payment reference". */
-  payment: (teamId, password, utr) =>
-    apiPost("/api/payment", { teamId, password, utr }),
+  payment: (teamId, password, utr, receipt) =>
+    apiPost("/api/payment", { teamId, password, utr, receipt }),
   testNotify: (adminKey) =>
     apiPost("/api/config", { testNotify: true, adminKey }),
   updateTournament: (tournament, adminKey) =>
@@ -60,6 +59,8 @@ const API = {
     apiPost("/api/admin", { action: "reject", matchId, slot, adminKey }),
   cancelRegistration: (matchId, slot, adminKey) =>
     apiPost("/api/admin", { action: "cancel", matchId, slot, adminKey }),
+  addRegistration: (matchId, data, adminKey) =>
+    apiPost("/api/admin", { action: "add", matchId, ...data, adminKey }),
 };
 
 /* ---------- DOM refs ---------- */
@@ -475,7 +476,9 @@ function showPayPanel(info) {
     statusEl.textContent = "✅ Payment verified — your slot is confirmed.";
     statusEl.classList.add("is-verified");
   } else if (status === "submitted") {
-    statusEl.textContent = `⏳ UTR ${info.utr || ""} received. An admin is verifying it — your slot is safe until then.`;
+    statusEl.textContent = info.receiptSubmitted
+      ? "⏳ Payment screenshot received. An admin is verifying it — your slot is safe until then."
+      : `⏳ UTR ${info.utr || ""} received. An admin is verifying it — your slot is safe until then.`;
     statusEl.classList.add("is-submitted");
   } else {
     statusEl.textContent = "⚠️ Entry fee pending. Without payment your slot will be released.";
@@ -521,6 +524,9 @@ function showPayPanel(info) {
     // suggest when they refuse a link, so surface it when one is configured.
     el("payPhone").textContent = fee.phone || "";
     el("payPhoneRow").hidden = !fee.phone;
+    const qr = el("payQr");
+    qr.src = fee.qrUrl || "qr.png";
+    syncQrVisibility();
   }
 
   el("payGate").hidden = true;
@@ -592,15 +598,29 @@ el("utrForm").addEventListener("submit", async (e) => {
   if (!auth) return showPayGate("Your session has expired — log in again.");
 
   const utr = el("payUtr").value.trim();
-  if (!utr) return setUtrAlert("Enter the UTR / transaction ID from your UPI app.");
+  const file = el("payReceipt").files[0];
+  if (!utr && !file) return setUtrAlert("Enter a UTR or upload your payment screenshot.");
+  if (file && (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 500 * 1024)) {
+    return setUtrAlert("Upload a PNG, JPG or WEBP screenshot under 500 KB.");
+  }
 
   const btn = el("utrBtn");
   btn.disabled = true;
   btn.textContent = "Submitting…";
 
   try {
-    const info = await API.payment(auth.teamId, auth.password, utr);
+    const receipt = file
+      ? await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Could not read the screenshot"));
+          reader.readAsDataURL(file);
+        })
+      : null;
+    const info = await API.payment(auth.teamId, auth.password, utr, receipt);
     el("payUtr").value = "";
+    el("payReceipt").value = "";
+    el("payReceiptName").textContent = "No screenshot selected";
     showPayPanel(info);
   } catch (err) {
     setUtrAlert(err.message);
@@ -608,6 +628,11 @@ el("utrForm").addEventListener("submit", async (e) => {
     btn.disabled = false;
     btn.textContent = "Submit Payment Reference";
   }
+});
+
+el("payReceipt").addEventListener("change", () => {
+  const file = el("payReceipt").files[0];
+  el("payReceiptName").textContent = file ? file.name : "No screenshot selected";
 });
 
 /* The QR is optional: drop a qr.png next to index.html and it appears, leave it out
@@ -1095,6 +1120,7 @@ function openMatchEditor(m) {
   // A merchant QR goes back in as the full link — prefilling the bare VPA would
   // silently drop the signature on the next save.
   el("mVpa").value = m?.entryFee ? payeeField(m.entryFee) : "";
+  el("mQrUrl").value = m?.entryFee?.qrUrl || "";
   el("mAmount").value = m?.entryFee?.amount || "";
   el("mUpiPhone").value = m?.entryFee?.phone || "";
   el("mPayee").value = m?.entryFee?.name || "";
@@ -1115,6 +1141,24 @@ matchEditForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   setMatchEditAlert("");
 
+  const qrFile = el("mQrFile").files[0];
+  let qrUrl = el("mQrUrl").value.trim();
+  if (qrFile) {
+    if (!/^image\/(png|jpeg|webp)$/.test(qrFile.type) || qrFile.size > 500 * 1024) {
+      return setMatchEditAlert("Upload a PNG, JPG or WEBP QR image under 500 KB.");
+    }
+    qrUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Could not read the QR image"));
+      reader.readAsDataURL(qrFile);
+    }).catch((err) => {
+      setMatchEditAlert(err.message);
+      return null;
+    });
+    if (!qrUrl) return;
+  }
+
   const payload = {
     name: el("mName").value.trim(),
     matchTime: el("mTime").value.trim(),
@@ -1125,6 +1169,7 @@ matchEditForm.addEventListener("submit", async (e) => {
       amount: el("mAmount").value.trim(),
       name: el("mPayee").value.trim(),
       phone: el("mUpiPhone").value.trim(),
+      qrUrl,
     },
   };
   // Left blank, the slot numbers keep their current (or default) values.
@@ -1171,6 +1216,9 @@ function registrationRow(matchId, r) {
   const status = r.payment_status || "verified";
   const badge = PAY_BADGES[status] || PAY_BADGES.verified;
   const utr = r.utr ? `UTR: <strong>${escapeHtml(r.utr)}</strong><br/>` : "";
+  const receipt = r.receipt_data
+    ? `<a class="receipt-link" href="${escapeHtml(r.receipt_data)}" target="_blank" rel="noopener">🧾 View payment screenshot</a><br/>`
+    : "";
 
   // A team that has paid needs no verify button; one that hasn't can't be rejected.
   const actions = [
@@ -1190,7 +1238,7 @@ function registrationRow(matchId, r) {
     Team: ${escapeHtml(r.team_name)}<br/>
     Leader: ${escapeHtml(r.leader_name)}<br/>
     ${squad}Phone: ${escapeHtml(r.phone)}<br/>
-    ${utr}ID: ${escapeHtml(r.team_id)} · Pass: ${escapeHtml(r.password)}
+    ${utr}${receipt}ID: ${escapeHtml(r.team_id)} · Pass: ${escapeHtml(r.password)}
     <div class="reg-acts">${actions}</div>
   </div>`;
 }
@@ -1201,26 +1249,144 @@ async function renderRegistrations() {
 
   try {
     await loadAdminMatches();
-    regList.innerHTML = adminMatches.length
-      ? adminMatches
-          .map((m) => {
-            const rows = m.registrations.length
-              ? m.registrations.map((r) => registrationRow(m.id, r)).join("")
-              : "<p style='color:var(--muted);padding:8px 0'>No registrations yet</p>";
-            return `
-              <h3 style="margin:16px 0 2px;color:var(--accent-2)">
-                ${escapeHtml(m.name)}
-                <span style="color:var(--muted);font-size:0.78em;font-weight:400">
-                  ${m.id}${m.matchTime ? " · " + escapeHtml(m.matchTime) : ""} · ${m.registrations.length}/${m.totalSlots}
-                </span>
-              </h3>${rows}`;
-          })
-          .join("")
-      : "<p style='text-align:center;color:var(--muted)'>No matches yet — create one in Manage Matches</p>";
+    renderRegistrationList();
   } catch (err) {
     regList.innerHTML = `<p style="text-align:center;color:var(--danger)">${escapeHtml(err.message)}</p>`;
   }
 }
+
+function renderRegistrationList() {
+  const query = el("regSearch").value.trim().toLowerCase();
+  const allRegistrations = adminMatches.flatMap((match) => match.registrations);
+  const verified = allRegistrations.filter((registration) => (registration.payment_status || "verified") === "verified").length;
+  const submitted = allRegistrations.filter((registration) => registration.payment_status === "submitted").length;
+  const available = adminMatches.reduce((total, match) => total + Math.max(0, match.totalSlots - match.registrations.length), 0);
+  el("regSummary").innerHTML = [
+    `<span><strong>${allRegistrations.length}</strong> teams</span>`,
+    `<span class="is-good"><strong>${verified}</strong> verified</span>`,
+    `<span class="is-warn"><strong>${submitted}</strong> proofs waiting</span>`,
+    `<span><strong>${available}</strong> slots open</span>`,
+  ].join("");
+  el("regList").innerHTML = adminMatches.length
+    ? adminMatches.map((match) => {
+        const registrations = match.registrations.filter((registration) => {
+          if (!query) return true;
+          return [match.name, match.id, registration.team_name, registration.leader_name,
+            registration.phone, registration.team_id, registration.payment_status || "verified"]
+            .join(" ").toLowerCase().includes(query);
+        });
+        const rows = registrations.length
+          ? registrations.map((registration) => registrationRow(match.id, registration)).join("")
+          : "<p style='color:var(--muted);padding:8px 0'>No matching registrations</p>";
+        return `
+          <h3 style="margin:16px 0 2px;color:var(--accent-2)">
+            ${escapeHtml(match.name)}
+            <span style="color:var(--muted);font-size:0.78em;font-weight:400">
+              ${match.id}${match.matchTime ? " · " + escapeHtml(match.matchTime) : ""} · ${registrations.length}/${match.totalSlots} shown
+            </span>
+          </h3>${rows}`;
+      }).join("")
+    : "<p style='text-align:center;color:var(--muted)'>No matches yet — create one in Manage Matches</p>";
+}
+
+el("regSearch").addEventListener("input", renderRegistrationList);
+el("refreshRegistrationsBtn").addEventListener("click", async () => {
+  const button = el("refreshRegistrationsBtn");
+  button.disabled = true;
+  button.textContent = "Refreshing…";
+  try {
+    await renderRegistrations();
+  } finally {
+    button.disabled = false;
+    button.textContent = "Refresh";
+  }
+});
+
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+
+el("exportRegistrationsBtn").addEventListener("click", () => {
+  const query = el("regSearch").value.trim().toLowerCase();
+  const rows = [["Match", "Slot", "Status", "Team", "Leader", "Phone", "Members", "Team ID", "Password", "UTR", "Receipt"]];
+  for (const match of adminMatches) {
+    for (const registration of match.registrations) {
+      const searchable = [match.name, match.id, registration.team_name, registration.leader_name,
+        registration.phone, registration.team_id, registration.payment_status || "verified"]
+        .join(" ").toLowerCase();
+      if (query && !searchable.includes(query)) continue;
+      rows.push([
+        match.name, registration.slot_number, registration.payment_status || "verified",
+        registration.team_name, registration.leader_name, registration.phone,
+        (registration.members || []).join(" | "), registration.team_id, registration.password,
+        registration.utr || "", registration.receipt_data ? "Yes" : "No",
+      ]);
+    }
+  }
+  const blob = new Blob([rows.map((row) => row.map(csvCell).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `fragify-registrations-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
+/* ---------- Admin: manual verified team ---------- */
+const manualTeamModal = el("manualTeamModal");
+const manualTeamForm = el("manualTeamForm");
+
+function setManualTeamAlert(msg) {
+  const alert = el("manualTeamAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
+
+function openManualTeamModal() {
+  setManualTeamAlert("");
+  const select = el("manualMatch");
+  select.innerHTML = adminMatches.map((m) =>
+    `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} (${m.registrations.length}/${m.totalSlots})</option>`
+  ).join("");
+  manualTeamForm.reset();
+  if (adminMatches.length) select.value = adminMatches[0].id;
+  manualTeamModal.hidden = false;
+}
+
+el("manualTeamBtn").addEventListener("click", openManualTeamModal);
+manualTeamModal.querySelector(".modal__close").addEventListener("click", () => {
+  manualTeamModal.hidden = true;
+});
+manualTeamModal.querySelector(".modal__backdrop").addEventListener("click", () => {
+  manualTeamModal.hidden = true;
+});
+
+manualTeamForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setManualTeamAlert("");
+  const saveBtn = el("manualTeamSaveBtn");
+  const data = {
+    teamName: el("manualTeamName").value.trim(),
+    leaderName: el("manualLeaderName").value.trim(),
+    phone: el("manualPhone").value.trim(),
+    members: el("manualMembers").value.split("\n").map((value) => value.trim()).filter(Boolean),
+  };
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Adding…";
+  try {
+    const result = await API.addRegistration(el("manualMatch").value, data, adminKey);
+    manualTeamModal.hidden = true;
+    await renderRegistrations();
+    await renderMatchList();
+    await renderSlots();
+    alert(`✅ Team added\n\nSlot: #${String(result.registration.slot_number).padStart(2, "0")}\nTeam ID: ${result.registration.team_id}\nPassword: ${result.registration.password}`);
+  } catch (err) {
+    setManualTeamAlert(err.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Add Verified Team";
+  }
+});
 
 /* Delegated: the rows are rebuilt after every action, so per-button listeners would
    be re-bound each time. */

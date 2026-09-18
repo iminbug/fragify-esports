@@ -184,7 +184,11 @@ function cleanUpi(raw) {
     return { error: "The UPI mobile number must be 10 digits" };
   }
 
-  return { upi: { vpa, name, amount, phone: phone || null, extra } };
+  const qrUrl = normalizeQrSource(raw.qrUrl);
+  if (raw.qrUrl && !qrUrl) {
+    return { error: "QR must be a valid HTTPS image URL or an image under 500 KB" };
+  }
+  return { upi: { vpa, name, amount, phone: phone || null, extra, qrUrl } };
 }
 
 /* Stored links must be absolute — a scheme-less value would be treated as a relative
@@ -199,6 +203,15 @@ function normalizeLink(raw) {
   } catch {
     return null;
   }
+}
+
+function normalizeQrSource(raw) {
+  const value = String(raw || "").trim();
+  if (!value) return null;
+  if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) {
+    return value.length <= 700000 ? value : null;
+  }
+  return normalizeLink(value);
 }
 
 /* ---- Match create / update ---- */
