@@ -1,9 +1,13 @@
 import { kv } from "@vercel/kv";
 import { authenticateTeam } from "../lib/team-auth.js";
+import { getMatch, matchKeys } from "../lib/matches.js";
 
 /* Room credentials go only to teams that registered *and* paid, so this endpoint checks
    the Team ID and password issued at registration before returning anything. The public
-   slots endpoint only ever says whether a room is live. */
+   slots endpoint only ever says whether a room is live.
+
+   Rooms are per match: the Team ID names the match, and the team only ever sees the
+   room posted for its own lobby — never the one running an hour later. */
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -24,7 +28,7 @@ export default async function handler(req, res) {
     if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
     const registration = auth.registration;
-    // Free tournaments predate the payment field; an absent status means nothing
+    // Free matches predate the payment field; an absent status means nothing
     // was ever owed.
     const status = registration.payment_status || "verified";
     if (status !== "verified") {
@@ -36,7 +40,8 @@ export default async function handler(req, res) {
       });
     }
 
-    const room = await kv.get("config:room");
+    const match = await getMatch(auth.matchId);
+    const room = await kv.get(matchKeys.room(auth.matchId));
     const secondsLeft = room?.expiresAt
       ? Math.ceil((room.expiresAt - Date.now()) / 1000)
       : 0;
@@ -44,6 +49,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       team: registration.team_name,
+      match: match ? match.name : auth.matchId,
       // null when nothing is posted yet — the team is verified, the room just
       // isn't open, and the UI says so instead of showing an error.
       room: room?.id && secondsLeft > 0

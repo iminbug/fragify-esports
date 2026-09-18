@@ -1,14 +1,16 @@
-import { kv } from "@vercel/kv";
-import { authenticateTeam, writeRegistration } from "../lib/team-auth.js";
+import { authenticateTeam } from "../lib/team-auth.js";
+import { getMatch, writeRegistration } from "../lib/matches.js";
 import { notifyUtrSubmitted } from "../lib/notify.js";
 
-/* A team checks its own payment status here, and submits the UTR from its UPI app.
+/* A team checks its own payment status here, and submits a UTR or payment screenshot.
    Everything is behind the Team ID + password issued at registration, so nobody can
    look up — or pay on behalf of — someone else's slot. */
 
 /* UPI reference numbers are 12 digits, but banks and apps show variations, so accept a
    sane alphanumeric range rather than rejecting a valid receipt on a strict pattern. */
 const UTR_PATTERN = /^[A-Za-z0-9]{6,24}$/;
+const RECEIPT_PATTERN = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+const MAX_RECEIPT_LENGTH = 700000;
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -21,19 +23,29 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { teamId, password, utr } = req.body || {};
+  const { teamId, password, utr, receipt } = req.body || {};
 
   try {
     const auth = await authenticateTeam(teamId, password);
     if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
     let registration = auth.registration;
-    const upi = (await kv.get("config:upi")) || null;
+    /* The fee, the room and the invite all belong to the team's own match — the Team
+       ID names which one, and getMatch reads that match's config. */
+    const match = await getMatch(auth.matchId);
+    const upi = match?.entryFee || null;
 
-    // A UTR in the body means "I've paid" — otherwise this is just a status check.
-    if (utr !== undefined && utr !== null && String(utr).trim() !== "") {
-      const reference = String(utr).trim().toUpperCase();
-      if (!UTR_PATTERN.test(reference)) {
+    const reference = String(utr || "").trim().toUpperCase();
+    const hasReceipt = receipt !== undefined && receipt !== null && String(receipt) !== "";
+    if (hasReceipt) {
+      if (typeof receipt !== "string" || receipt.length > MAX_RECEIPT_LENGTH || !RECEIPT_PATTERN.test(receipt)) {
+        return res.status(400).json({ error: "Upload a PNG, JPG or WEBP screenshot under 500 KB" });
+      }
+    }
+
+    // A UTR or receipt in the body means "I've paid" — otherwise this is just a status check.
+    if (reference || hasReceipt) {
+      if (reference && !UTR_PATTERN.test(reference)) {
         return res.status(400).json({
           error: "A UTR contains only letters and numbers (usually 12 digits)",
         });
@@ -42,9 +54,10 @@ export default async function handler(req, res) {
         return res.status(409).json({ error: "Payment already verified" });
       }
 
-      registration = await writeRegistration(auth.slot, {
+      registration = await writeRegistration(auth.matchId, auth.slot, {
         ...registration,
-        utr: reference,
+        utr: reference || registration.utr || null,
+        receipt_data: hasReceipt ? receipt : registration.receipt_data || null,
         payment_status: "submitted",
         // The clock stops once the team has done its part; from here an admin
         // decides, so the slot must not lapse underneath them.
@@ -61,9 +74,12 @@ export default async function handler(req, res) {
          submission rejected because Meta was slow or a token had expired. */
       await notifyUtrSubmitted({
         team: registration.team_name,
-        slot: `#${String(registration.slot_number).padStart(2, "0")}`,
+        match: match ? match.name : auth.matchId,
+        // The match id rides inside the slot field so the WhatsApp template keeps its
+        // approved five variables — slot #07 alone could be any lobby.
+        slot: `${auth.matchId} #${String(registration.slot_number).padStart(2, "0")}`,
         phone: registration.phone,
-        utr: reference,
+        utr: reference || "Screenshot uploaded",
         amount: upi?.amount ? `₹${upi.amount}` : "—",
       });
     }
@@ -74,29 +90,33 @@ export default async function handler(req, res) {
     /* The community invite is the payoff for a settled slot, so it is read only once
        the fee is verified — a pending or submitted team never has it in its response
        and so has nothing to find in the network tab either. */
-    const waLink =
-      status === "verified" ? (await kv.get("config:whatsapp_link")) || null : null;
+    const waLink = status === "verified" ? match?.whatsappLink || null : null;
 
     return res.status(200).json({
       ok: true,
       team: registration.team_name,
       teamId: registration.team_id,
       slot: registration.slot_number,
+      match: match
+        ? { id: match.id, name: match.name, matchTime: match.matchTime }
+        : { id: auth.matchId, name: auth.matchId, matchTime: "" },
       // Registrations made before entry fees existed have no status — they were
       // never asked to pay, so treat them as settled.
       status,
       utr: registration.utr || null,
+      receiptSubmitted: Boolean(registration.receipt_data),
       waLink,
       holdSecondsLeft:
         typeof deadline === "number"
           ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
           : null,
-      entryFee: upi?.vpa && upi.amount > 0
+      entryFee: upi
         ? {
             vpa: upi.vpa,
             name: upi.name,
             amount: upi.amount,
             phone: upi.phone || null,
+            qrUrl: upi.qrUrl || null,
             // Merchant-QR signature parameters; without them the paying app
             // refuses a link-started payment to a merchant VPA.
             extra: upi.extra || {},
