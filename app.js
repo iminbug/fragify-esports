@@ -621,6 +621,8 @@ el("utrForm").addEventListener("submit", async (e) => {
     el("payUtr").value = "";
     el("payReceipt").value = "";
     el("payReceiptName").textContent = "No screenshot selected";
+    el("payReceiptPreview").removeAttribute("src");
+    el("payReceiptPreview").hidden = true;
     showPayPanel(info);
   } catch (err) {
     setUtrAlert(err.message);
@@ -632,7 +634,21 @@ el("utrForm").addEventListener("submit", async (e) => {
 
 el("payReceipt").addEventListener("change", () => {
   const file = el("payReceipt").files[0];
-  el("payReceiptName").textContent = file ? file.name : "No screenshot selected";
+  const preview = el("payReceiptPreview");
+  if (!file) {
+    el("payReceiptName").textContent = "No screenshot selected";
+    preview.removeAttribute("src");
+    preview.hidden = true;
+    return;
+  }
+  el("payReceiptName").textContent = `${file.name} (${Math.ceil(file.size / 1024)} KB)`;
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 500 * 1024) {
+    preview.removeAttribute("src");
+    preview.hidden = true;
+    return;
+  }
+  preview.src = URL.createObjectURL(file);
+  preview.hidden = false;
 });
 
 /* The QR is optional: drop a qr.png next to index.html and it appears, leave it out
@@ -1207,6 +1223,7 @@ const PAY_BADGES = {
   submitted: { label: "UTR SUBMITTED", cls: "is-submitted" },
   verified: { label: "PAID", cls: "is-verified" },
 };
+const receiptStore = new Map();
 
 function registrationRow(matchId, r) {
   const members = Array.isArray(r.members) ? r.members : [];
@@ -1217,7 +1234,11 @@ function registrationRow(matchId, r) {
   const badge = PAY_BADGES[status] || PAY_BADGES.verified;
   const utr = r.utr ? `UTR: <strong>${escapeHtml(r.utr)}</strong><br/>` : "";
   const receipt = r.receipt_data
-    ? `<a class="receipt-link" href="${escapeHtml(r.receipt_data)}" target="_blank" rel="noopener">🧾 View payment screenshot</a><br/>`
+    ? (() => {
+        const key = `${matchId}:${r.slot_number}`;
+        receiptStore.set(key, r.receipt_data);
+        return `<button type="button" class="receipt-link" data-receipt-key="${escapeHtml(key)}">🧾 View payment screenshot</button><br/>`;
+      })()
     : "";
 
   // A team that has paid needs no verify button; one that hasn't can't be rejected.
@@ -1391,6 +1412,23 @@ manualTeamForm.addEventListener("submit", async (e) => {
 /* Delegated: the rows are rebuilt after every action, so per-button listeners would
    be re-bound each time. */
 el("regList").addEventListener("click", async (e) => {
+  const receiptButton = e.target.closest(".receipt-link");
+  if (receiptButton) {
+    const receipt = receiptStore.get(receiptButton.dataset.receiptKey);
+    if (!receipt) return alert("Receipt is no longer available. Refresh the list.");
+    const preview = window.open("", "_blank");
+    if (!preview) return alert("Allow pop-ups to view the payment screenshot.");
+    preview.document.title = "Payment Screenshot";
+    preview.document.body.textContent = "Loading screenshot…";
+    try {
+      const blob = await fetch(receipt).then((response) => response.blob());
+      preview.location.href = URL.createObjectURL(blob);
+    } catch {
+      preview.close();
+      alert("Could not open this payment screenshot.");
+    }
+    return;
+  }
   const btn = e.target.closest(".reg-act");
   if (!btn) return;
 

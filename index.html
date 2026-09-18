@@ -251,6 +251,7 @@
                 <label for="payReceipt">Payment Screenshot <span>(PNG, JPG or WEBP, max 500 KB)</span></label>
                 <input type="file" id="payReceipt" accept="image/png,image/jpeg,image/webp" />
                 <small id="payReceiptName">No screenshot selected</small>
+                <img id="payReceiptPreview" class="pay__receipt-preview" alt="Selected payment screenshot preview" hidden />
               </div>
               <p class="form__alert" id="utrAlert" role="alert" hidden></p>
               <button type="submit" class="btn btn--primary" id="utrBtn">
