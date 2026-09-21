@@ -7,6 +7,7 @@ import {
   matchKeys,
   normalizeMatchId,
   getMatch,
+  activeRegistrations,
   listMatchIds,
   nextMatchId,
   saveMatch,
@@ -384,6 +385,16 @@ export default async function handler(req, res) {
 
         const { match, error } = applyMatchFields(updateRaw, existing);
         if (error) return res.status(400).json({ error });
+        const registrations = await activeRegistrations(existing.id);
+        const lastSlot = match.firstSlot + match.totalSlots - 1;
+        const outOfRange = registrations.find((registration) =>
+          Number(registration.slot_number) < match.firstSlot || Number(registration.slot_number) > lastSlot
+        );
+        if (outOfRange) {
+          return res.status(409).json({
+            error: `Cannot use slots #${match.firstSlot}-#${lastSlot}; team ${outOfRange.team_name} is in slot #${outOfRange.slot_number}`,
+          });
+        }
         await saveMatch(match);
         return res.status(200).json({ ok: true, match });
       }
