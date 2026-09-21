@@ -88,7 +88,7 @@ export default async function handler(req, res) {
     }
 
     if (action === "add") {
-      const { teamName, leaderName, phone: rawPhone, members: rawMembers } = req.body || {};
+      const { teamName, leaderName, phone: rawPhone, members: rawMembers, slot: rawPreferredSlot } = req.body || {};
       if (!teamName || String(teamName).trim().length < 2) {
         return res.status(400).json({ error: "Team name is required" });
       }
@@ -112,7 +112,15 @@ export default async function handler(req, res) {
       if (registrations.some((r) => normalizeTeamName(r.team_name) === normalizeTeamName(teamName))) {
         return res.status(409).json({ error: "This team name is already registered for this match" });
       }
-      const slot = nextFreeSlot(match, registrations);
+      const preferredSlot = rawPreferredSlot === "" || rawPreferredSlot == null ? null : Number(rawPreferredSlot);
+      const lastSlot = match.firstSlot + match.totalSlots - 1;
+      if (preferredSlot !== null && (!Number.isInteger(preferredSlot) || preferredSlot < match.firstSlot || preferredSlot > lastSlot)) {
+        return res.status(400).json({ error: `Slot must be between #${match.firstSlot} and #${lastSlot}` });
+      }
+      if (preferredSlot !== null && registrations.some((r) => Number(r.slot_number) === preferredSlot)) {
+        return res.status(409).json({ error: "That slot is already occupied" });
+      }
+      const slot = preferredSlot ?? nextFreeSlot(match, registrations);
       if (slot === null) return res.status(409).json({ error: "This match is full" });
 
       const registration = {
@@ -136,6 +144,36 @@ export default async function handler(req, res) {
       await kv.set(matchKeys.phone(match.id, phone), slot);
       await kv.set(matchKeys.slot(match.id, slot), registration);
       return res.status(200).json({ ok: true, registration });
+    }
+
+    if (action === "move") {
+      const fromSlot = Number(rawSlot);
+      const toSlot = Number(req.body?.toSlot);
+      const lastSlot = match.firstSlot + match.totalSlots - 1;
+      if (!Number.isInteger(fromSlot) || !Number.isInteger(toSlot)) {
+        return res.status(400).json({ error: "Source and destination slots are required" });
+      }
+      if (toSlot < match.firstSlot || toSlot > lastSlot) {
+        return res.status(400).json({ error: `Slot must be between #${match.firstSlot} and #${lastSlot}` });
+      }
+      if (fromSlot === toSlot) return res.status(400).json({ error: "Choose a different destination slot" });
+      const registration = await findRegistration(match.id, fromSlot);
+      if (!registration) return res.status(404).json({ error: "No team in the source slot" });
+      if (await findRegistration(match.id, toSlot)) return res.status(409).json({ error: "That destination slot is already occupied" });
+
+      const moved = {
+        ...registration,
+        slot_number: toSlot,
+        team_id: `FRG-${match.id}-${String(toSlot).padStart(3, "0")}`,
+        slot_updated_at: new Date().toISOString(),
+      };
+      const list = (await activeRegistrations(match.id)).map((entry) =>
+        Number(entry.slot_number) === fromSlot ? moved : entry
+      );
+      await kv.set(matchKeys.list(match.id), list);
+      await kv.del(matchKeys.slot(match.id, fromSlot));
+      await kv.set(matchKeys.slot(match.id, toSlot), moved);
+      return res.status(200).json({ ok: true, registration: moved });
     }
 
     // Everything below acts on one team.

@@ -61,6 +61,8 @@ const API = {
     apiPost("/api/admin", { action: "cancel", matchId, slot, adminKey }),
   addRegistration: (matchId, data, adminKey) =>
     apiPost("/api/admin", { action: "add", matchId, ...data, adminKey }),
+  moveRegistration: (matchId, slot, toSlot, adminKey) =>
+    apiPost("/api/admin", { action: "move", matchId, slot, toSlot, adminKey }),
 };
 
 /* ---------- DOM refs ---------- */
@@ -1243,6 +1245,7 @@ function registrationRow(matchId, r) {
 
   // A team that has paid needs no verify button; one that hasn't can't be rejected.
   const actions = [
+    `<button class="reg-act" data-act="move" data-match="${matchId}" data-slot="${r.slot_number}">↔️ Move Slot</button>`,
     status !== "verified"
       ? `<button class="reg-act reg-act--ok" data-act="verify" data-match="${matchId}" data-slot="${r.slot_number}">✅ Verify</button>`
       : "",
@@ -1391,6 +1394,7 @@ manualTeamForm.addEventListener("submit", async (e) => {
     leaderName: el("manualLeaderName").value.trim(),
     phone: el("manualPhone").value.trim(),
     members: el("manualMembers").value.split("\n").map((value) => value.trim()).filter(Boolean),
+    slot: el("manualSlot").value.trim(),
   };
   saveBtn.disabled = true;
   saveBtn.textContent = "Adding…";
@@ -1438,10 +1442,27 @@ el("regList").addEventListener("click", async (e) => {
   const label = `${matchId} · #${String(slot).padStart(2, "0")}`;
 
   const confirms = {
+    move: "Move this team to the selected destination slot?",
     verify: `Mark the payment for slot ${label} as verified?`,
     reject: `Reject the UTR for slot ${label}? The team will get another chance to pay.`,
     cancel: `Cancel slot ${label}? The team is removed and the slot goes to the next registration.`,
   };
+  if (act === "move") {
+    const destination = prompt(`Destination slot for ${label}:`);
+    if (destination === null || !destination.trim()) return;
+    const toSlot = Number(destination.trim());
+    if (!Number.isInteger(toSlot)) return alert("Enter a valid slot number.");
+    btn.disabled = true;
+    try {
+      await API.moveRegistration(matchId, slot, toSlot, adminKey);
+      await renderRegistrations();
+      await renderSlots();
+    } catch (err) {
+      alert("❌ " + err.message);
+      btn.disabled = false;
+    }
+    return;
+  }
   if (!confirm(confirms[act])) return;
 
   btn.disabled = true;
