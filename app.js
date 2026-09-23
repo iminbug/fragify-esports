@@ -32,9 +32,12 @@ async function apiPost(path, body) {
 
 const API = {
   slots: () => apiGet("/api/register"),
+  results: (matchId) => apiGet(matchId ? `/api/results?matchId=${encodeURIComponent(matchId)}` : "/api/results"),
+  publishResults: (matchId, rows, adminKey) => apiPost("/api/results", { matchId, rows, adminKey }),
   config: () => apiGet("/api/config"),
   register: (data) => apiPost("/api/register", data),
   room: (teamId, password) => apiPost("/api/room", { teamId, password }),
+  checkIn: (teamId, password) => apiPost("/api/checkin", { teamId, password }),
   payment: (teamId, password, utr, receipt) =>
     apiPost("/api/payment", { teamId, password, utr, receipt }),
   testNotify: (adminKey) =>
@@ -55,6 +58,8 @@ const API = {
     apiPost("/api/admin", { action: "reset", matchId, adminKey }),
   verifyPayment: (matchId, slot, adminKey) =>
     apiPost("/api/admin", { action: "verify", matchId, slot, adminKey }),
+  approveRegistration: (matchId, slot, adminKey) =>
+    apiPost("/api/admin", { action: "approve", matchId, slot, adminKey }),
   rejectPayment: (matchId, slot, adminKey) =>
     apiPost("/api/admin", { action: "reject", matchId, slot, adminKey }),
   cancelRegistration: (matchId, slot, adminKey) =>
@@ -242,6 +247,7 @@ async function renderSlots() {
   renderBoards();
   renderMatchChoice();
   syncPaymentSection();
+  renderLeaderboard();
 
   // The hero meter aggregates every match — it answers "how busy is match day",
   // while the per-match numbers live on the choice cards and the boards.
@@ -287,6 +293,24 @@ async function renderSlots() {
     heroCta.style.pointerEvents = "";
     heroCta.style.opacity = "";
   }
+}
+
+let publishedResults = null;
+let leaderboardRequestId = null;
+
+async function renderLeaderboard() {
+  try {
+    const { results } = await API.results(leaderboardRequestId);
+    publishedResults = results;
+  } catch {
+    publishedResults = null;
+  }
+  const rows = publishedResults?.leaderboard || [];
+  el("leaderboardSection").hidden = rows.length === 0;
+  if (!rows.length) return;
+  el("leaderboardMatch").textContent = `${publishedResults.matchName} · Erangel, Miramar, Rondo`;
+  el("leaderboardRows").innerHTML = rows.map((row) => `
+    <tr><td>${row.rank}</td><td>#${String(row.slot).padStart(2, "0")}</td><td>${escapeHtml(row.team)}</td><td>${row.chickenDinners}</td><td>${row.kills}</td><td><strong>${row.points}</strong></td></tr>`).join("");
 }
 
 /* ---------- Live room credentials ---------- */
@@ -429,6 +453,27 @@ el("roomLockBtn").addEventListener("click", () => {
   showRoomGate();
 });
 
+el("checkInBtn").addEventListener("click", async () => {
+  const auth = savedAuth();
+  if (!auth) return showRoomGate("Your session has expired — unlock the room again.");
+  const button = el("checkInBtn");
+  const status = el("checkInStatus");
+  button.disabled = true;
+  button.textContent = "Checking in…";
+  status.hidden = true;
+  try {
+    const result = await API.checkIn(auth.teamId, auth.password);
+    status.textContent = `✅ ${result.team} checked in for ${result.match}.`;
+    status.hidden = false;
+    button.textContent = "Checked In";
+  } catch (err) {
+    status.textContent = "❌ " + err.message;
+    status.hidden = false;
+    button.disabled = false;
+    button.textContent = "Check In for Match";
+  }
+});
+
 /* ---------- Entry fee ---------- */
 /* The whole section only exists when at least one match has a fee. A team unlocks it
    with the same Team ID + password as the room card — the server answers with *their
@@ -475,7 +520,9 @@ function showPayPanel(info) {
   statusEl.classList.remove("is-pending", "is-submitted", "is-verified");
 
   if (status === "verified") {
-    statusEl.textContent = "✅ Payment verified — your slot is confirmed.";
+    statusEl.textContent = info.approved
+      ? "✅ Registration approved — your slot is confirmed."
+      : "⏳ Payment is verified. Your registration is waiting for admin approval.";
     statusEl.classList.add("is-verified");
   } else if (status === "submitted") {
     statusEl.textContent = info.receiptSubmitted
@@ -491,7 +538,7 @@ function showPayPanel(info) {
      is what decides that — an unverified team simply gets no link in the response, so
      there is nothing here to reveal early. */
   const waBtn = el("payWaLink");
-  const waHref = status === "verified" ? normalizeWaLink(info.waLink) : null;
+  const waHref = status === "verified" && info.approved ? normalizeWaLink(info.waLink) : null;
   if (waHref) {
     waBtn.href = waHref;
     waBtn.hidden = false;
@@ -749,6 +796,8 @@ function renderDetails() {
   // Nothing configured yet — keep the whole section out of the page.
   el("detailsSection").hidden =
     tiles.length === 0 && prizes.length === 0 && rules.length === 0;
+  el("announcementText").textContent = tournament.announcement || "";
+  el("announcementBar").hidden = !tournament.announcement;
 }
 
 async function loadDetails() {
@@ -914,8 +963,8 @@ function showSuccess(teamName, res) {
     waBtn.removeAttribute("href");
     waBtn.hidden = true;
     el("modalHint").textContent = res.paymentDue
-      ? "Save your Team ID & Password — screenshot this. The WhatsApp community link appears once your entry fee is verified."
-      : "Save your Team ID & Password — screenshot this. The WhatsApp community link will be shared with you shortly.";
+      ? "Save your Team ID & Password — screenshot this. After payment verification, an admin must approve your registration before the community link unlocks."
+      : "Save your Team ID & Password — screenshot this. Your slot is reserved and awaits admin approval; the community link unlocks after approval.";
   }
 
   const payNote = el("modalPayNote");
@@ -930,8 +979,9 @@ function showSuccess(teamName, res) {
     el("modalClose").textContent = "Go to payment →";
     pendingPayment = true;
   } else {
-    el("modalTitle").lastChild.textContent = " is yours";
-    payNote.hidden = true;
+    el("modalTitle").lastChild.textContent = " reserved";
+    payNote.textContent = "⏳ Your registration is waiting for admin approval. The slot and community link are confirmed after approval.";
+    payNote.hidden = false;
     el("modalClose").textContent = "Done";
     pendingPayment = false;
   }
@@ -1008,6 +1058,7 @@ const ACC_LOADERS = {
   accMatches: () => renderMatchList(),
   accRegs: () => renderRegistrations(),
   accDetails: () => prefillDetailsForm(),
+  accResults: () => renderResultsEditor(),
 };
 
 async function openAccSection(id) {
@@ -1242,9 +1293,15 @@ function registrationRow(matchId, r) {
         return `<button type="button" class="receipt-link" data-receipt-key="${escapeHtml(key)}">🧾 View payment screenshot</button><br/>`;
       })()
     : "";
+  const checkIn = r.checked_in_at
+    ? '<span class="reg-badge is-verified">CHECKED IN</span><br/>'
+    : "";
 
   // A team that has paid needs no verify button; one that hasn't can't be rejected.
   const actions = [
+    status === "verified" && r.approval_status === "pending"
+      ? `<button class="reg-act reg-act--ok" data-act="approve" data-match="${matchId}" data-slot="${r.slot_number}">✅ Approve Team</button>`
+      : "",
     `<button class="reg-act" data-act="move" data-match="${matchId}" data-slot="${r.slot_number}">↔️ Move Slot</button>`,
     status !== "verified"
       ? `<button class="reg-act reg-act--ok" data-act="verify" data-match="${matchId}" data-slot="${r.slot_number}">✅ Verify</button>`
@@ -1262,7 +1319,7 @@ function registrationRow(matchId, r) {
     Team: ${escapeHtml(r.team_name)}<br/>
     Leader: ${escapeHtml(r.leader_name)}<br/>
     ${squad}Phone: ${escapeHtml(r.phone)}<br/>
-    ${utr}${receipt}ID: ${escapeHtml(r.team_id)} · Pass: ${escapeHtml(r.password)}
+    ${checkIn}${utr}${receipt}ID: ${escapeHtml(r.team_id)} · Pass: ${escapeHtml(r.password)}
     <div class="reg-acts">${actions}</div>
   </div>`;
 }
@@ -1284,11 +1341,13 @@ function renderRegistrationList() {
   const allRegistrations = adminMatches.flatMap((match) => match.registrations);
   const verified = allRegistrations.filter((registration) => (registration.payment_status || "verified") === "verified").length;
   const submitted = allRegistrations.filter((registration) => registration.payment_status === "submitted").length;
+  const checkedIn = allRegistrations.filter((registration) => registration.checked_in_at).length;
   const available = adminMatches.reduce((total, match) => total + Math.max(0, match.totalSlots - match.registrations.length), 0);
   el("regSummary").innerHTML = [
     `<span><strong>${allRegistrations.length}</strong> teams</span>`,
     `<span class="is-good"><strong>${verified}</strong> verified</span>`,
     `<span class="is-warn"><strong>${submitted}</strong> proofs waiting</span>`,
+    `<span class="is-good"><strong>${checkedIn}</strong> checked in</span>`,
     `<span><strong>${available}</strong> slots open</span>`,
   ].join("");
   el("regList").innerHTML = adminMatches.length
@@ -1312,6 +1371,118 @@ function renderRegistrationList() {
       }).join("")
     : "<p style='text-align:center;color:var(--muted)'>No matches yet — create one in Manage Matches</p>";
 }
+
+/* ---------- Admin: 3-map leaderboard ---------- */
+const RESULT_MAPS = ["Erangel", "Miramar", "Rondo"];
+
+function setResultsAlert(message) {
+  const alert = el("resultsAlert");
+  alert.textContent = message || "";
+  alert.hidden = !message;
+}
+
+function resultInput(slot, map, field, max) {
+  return `<input type="number" min="${field === "placement" ? 1 : 0}" max="${max}" data-result-slot="${slot}" data-result-map="${map}" data-result-field="${field}" inputmode="numeric" required />`;
+}
+
+async function renderResultsEditor() {
+  const editor = el("resultsEditor");
+  editor.innerHTML = "<p style='color:var(--muted)'>Loading teams…</p>";
+  try {
+    await loadAdminMatches();
+    const select = el("resultsMatch");
+    const previous = select.value;
+    select.innerHTML = adminMatches.map((match) =>
+      `<option value="${escapeHtml(match.id)}">${escapeHtml(match.name)} (${match.id})</option>`
+    ).join("");
+    if (adminMatches.some((match) => match.id === previous)) select.value = previous;
+    renderResultsRows();
+  } catch (err) {
+    editor.innerHTML = `<p style='color:var(--danger)'>${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderResultsRows() {
+  const match = adminMatches.find((entry) => entry.id === el("resultsMatch").value);
+  const editor = el("resultsEditor");
+  if (!match) return (editor.innerHTML = "<p style='color:var(--muted)'>Create a match first.</p>");
+  const teams = match.registrations;
+  if (!teams.length) return (editor.innerHTML = "<p style='color:var(--muted)'>No booked slots for this match yet.</p>");
+  editor.innerHTML = `<table class="results-editor"><thead><tr><th>Team</th>${RESULT_MAPS.map((map) => `<th>${map}<br/><small>Place / Kills</small></th>`).join("")}</tr></thead><tbody>${teams.map((team) =>
+    `<tr><td><strong>#${String(team.slot_number).padStart(2, "0")}</strong> ${escapeHtml(team.team_name)}</td>${RESULT_MAPS.map((map) =>
+      `<td><span class="results-editor__inputs">${resultInput(team.slot_number, map, "placement", match.totalSlots)}${resultInput(team.slot_number, map, "kills", 100)}</span></td>`
+    ).join("")}</tr>`
+  ).join("")}</tbody></table>`;
+  updateResultsPreview();
+}
+
+const RESULT_POINTS = { 1: 15, 2: 12, 3: 10, 4: 8, 5: 6, 6: 4, 7: 2 };
+
+function updateResultsPreview() {
+  const match = adminMatches.find((entry) => entry.id === el("resultsMatch").value);
+  if (!match) return;
+  const totals = new Map();
+  for (const team of match.registrations) {
+    totals.set(Number(team.slot_number), { slot: Number(team.slot_number), team: team.team_name, points: 0, kills: 0, wwcd: 0, bestPlacement: 99 });
+  }
+  for (const input of el("resultsEditor").querySelectorAll("[data-result-slot]")) {
+    const row = totals.get(Number(input.dataset.resultSlot));
+    const value = Number(input.value);
+    if (!row || !Number.isFinite(value)) continue;
+    if (input.dataset.resultField === "kills") {
+      row.kills += value;
+      row.points += value;
+    } else {
+      row.points += RESULT_POINTS[value] || 0;
+      row.wwcd += value === 1 ? 1 : 0;
+      row.bestPlacement = Math.min(row.bestPlacement, value || 99);
+    }
+  }
+  const ranked = [...totals.values()].sort((a, b) => b.points - a.points || b.wwcd - a.wwcd || b.kills - a.kills || a.bestPlacement - b.bestPlacement);
+  el("resultsPreview").innerHTML = ranked.map((row, index) =>
+    `<span><strong>${index + 1}.</strong> #${String(row.slot).padStart(2, "0")} ${escapeHtml(row.team)} <b>${row.points}</b></span>`
+  ).join("");
+}
+
+el("resultsEditor").addEventListener("input", updateResultsPreview);
+
+el("resultsMatch").addEventListener("change", () => {
+  setResultsAlert("");
+  renderResultsRows();
+});
+
+el("publishResultsBtn").addEventListener("click", async () => {
+  const match = adminMatches.find((entry) => entry.id === el("resultsMatch").value);
+  if (!match) return setResultsAlert("Choose a match first.");
+  const rowsBySlot = new Map();
+  for (const input of el("resultsEditor").querySelectorAll("[data-result-slot]")) {
+    const slot = Number(input.dataset.resultSlot);
+    const row = rowsBySlot.get(slot) || { slot, maps: {} };
+    const map = input.dataset.resultMap;
+    row.maps[map] = row.maps[map] || {};
+    row.maps[map][input.dataset.resultField] = input.value;
+    rowsBySlot.set(slot, row);
+  }
+  const rows = [...rowsBySlot.values()];
+  if (!rows.length || rows.some((row) => RESULT_MAPS.some((map) => !row.maps[map]?.placement || row.maps[map]?.kills === ""))) {
+    return setResultsAlert("Enter placement and kills for every approved team across all 3 maps.");
+  }
+  const button = el("publishResultsBtn");
+  button.disabled = true;
+  button.textContent = "Publishing…";
+  setResultsAlert("");
+  try {
+    await API.publishResults(match.id, rows, adminKey);
+    leaderboardRequestId = match.id;
+    await renderLeaderboard();
+    setResultsAlert("✅ Top 8 published on the public dashboard.");
+  } catch (err) {
+    setResultsAlert(err.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Publish Top 8";
+  }
+});
 
 el("regSearch").addEventListener("input", renderRegistrationList);
 el("refreshRegistrationsBtn").addEventListener("click", async () => {
@@ -1442,6 +1613,7 @@ el("regList").addEventListener("click", async (e) => {
   const label = `${matchId} · #${String(slot).padStart(2, "0")}`;
 
   const confirms = {
+      approve: `Approve registration for slot ${label}? The community link will unlock for this team.`,
     move: "Move this team to the selected destination slot?",
     verify: `Mark the payment for slot ${label} as verified?`,
     reject: `Reject the UTR for slot ${label}? The team will get another chance to pay.`,
@@ -1468,6 +1640,7 @@ el("regList").addEventListener("click", async (e) => {
   btn.disabled = true;
   try {
     if (act === "verify") await API.verifyPayment(matchId, slot, adminKey);
+    else if (act === "approve") await API.approveRegistration(matchId, slot, adminKey);
     else if (act === "reject") await API.rejectPayment(matchId, slot, adminKey);
     else await API.cancelRegistration(matchId, slot, adminKey);
     await renderRegistrations();
@@ -1574,6 +1747,7 @@ function prefillDetailsForm() {
   detailsForm.rules.value = Array.isArray(tournament.rules)
     ? tournament.rules.join("\n")
     : "";
+  detailsForm.announcement.value = tournament.announcement || "";
 }
 
 detailsForm.addEventListener("submit", async (e) => {
@@ -1589,6 +1763,7 @@ detailsForm.addEventListener("submit", async (e) => {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+  payload.announcement = detailsForm.announcement.value.trim();
 
   const saveBtn = el("detailsSaveBtn");
   saveBtn.disabled = true;

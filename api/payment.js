@@ -90,7 +90,8 @@ export default async function handler(req, res) {
     /* The community invite is the payoff for a settled slot, so it is read only once
        the fee is verified — a pending or submitted team never has it in its response
        and so has nothing to find in the network tab either. */
-    const waLink = status === "verified" ? match?.whatsappLink || null : null;
+    const approved = registration.approval_status !== "pending";
+    const waLink = status === "verified" && approved ? match?.whatsappLink || null : null;
 
     return res.status(200).json({
       ok: true,
@@ -103,6 +104,7 @@ export default async function handler(req, res) {
       // Registrations made before entry fees existed have no status — they were
       // never asked to pay, so treat them as settled.
       status,
+      approved,
       utr: registration.utr || null,
       receiptSubmitted: Boolean(registration.receipt_data),
       waLink,

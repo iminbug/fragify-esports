@@ -39,6 +39,9 @@ export default async function handler(req, res) {
         paymentStatus: status,
       });
     }
+    if (registration.approval_status === "pending") {
+      return res.status(403).json({ error: "Wait for admin approval before opening room details" });
+    }
 
     const match = await getMatch(auth.matchId);
     const room = await kv.get(matchKeys.room(auth.matchId));

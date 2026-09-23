@@ -55,12 +55,13 @@ function cleanMembers(raw) {
 function publicBoard(list) {
   return list
     .map((r) => {
-      // Registrations predating entry fees have no status; they never owed anything.
+      // Older registrations predate admin approval and remain confirmed.
       const status = r.payment_status || "verified";
+      const approved = r.approval_status !== "pending";
       return {
         slot: Number(r.slot_number),
-        name: status === "verified" ? r.team_name : null,
-        confirmed: status === "verified",
+        name: status === "verified" && approved ? r.team_name : null,
+        confirmed: status === "verified" && approved,
       };
     })
     .sort((a, b) => a.slot - b.slot);
@@ -173,6 +174,7 @@ export default async function handler(req, res) {
         password: password,
         created_at: new Date().toISOString(),
         payment_status: entryFee ? "pending" : "verified",
+        approval_status: "pending",
         payment_deadline: entryFee ? Date.now() + HOLD_MINUTES * 60 * 1000 : null,
         utr: null,
       };
@@ -188,7 +190,7 @@ export default async function handler(req, res) {
       // A team that still owes the entry fee gets nothing here at all: the invite is
       // the one thing an unpaid squad could take and walk away with, so it is held
       // back until an admin verifies the payment and /api/payment hands it over.
-      const waLink = entryFee ? null : match.whatsappLink;
+      const waLink = null;
 
       return res.status(200).json({
         ok: true,

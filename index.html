@@ -55,6 +55,10 @@
   </header>
 
   <main>
+    <section class="announcement" id="announcementBar" hidden>
+      <span class="announcement__label">LIVE UPDATE</span>
+      <p id="announcementText"></p>
+    </section>
     <!-- HERO -->
     <section class="hero">
       <p class="hero__eyebrow">// SEASON 01 ·  SQUAD SHOWDOWN</p>
@@ -109,6 +113,21 @@
     </section>
 
     <!-- ROOM CREDENTIALS (admin-posted, unlocked with Team ID + password, 10-min life) -->
+    <section class="leaderboard" id="leaderboardSection" hidden>
+      <div class="section__head">
+        <p class="section__eyebrow">Match Results</p>
+        <h2>Top 8 Leaderboard</h2>
+        <p id="leaderboardMatch"></p>
+      </div>
+      <div class="leaderboard__table-wrap">
+        <table class="leaderboard__table">
+          <thead><tr><th>Rank</th><th>Slot</th><th>Team</th><th>WWCD</th><th>Kills</th><th>Points</th></tr></thead>
+          <tbody id="leaderboardRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ROOM CREDENTIALS (admin-posted, unlocked with Team ID + password, 10-min life) -->
     <section class="room" id="roomBanner" hidden>
       <div class="room__card">
         <div class="room__head">
@@ -152,6 +171,8 @@
             </div>
           </div>
           <p class="room__note">⚡ Take a screenshot — these details disappear on their own when the timer runs out.</p>
+          <button type="button" class="btn btn--primary room__checkin" id="checkInBtn">Check In for Match</button>
+          <p class="room__note" id="checkInStatus" hidden></p>
           <button type="button" class="room__lock" id="roomLockBtn">Lock again</button>
         </div>
       </div>
@@ -489,6 +510,23 @@
           </div>
         </section>
 
+        <section class="admin-acc__item">
+          <button type="button" class="admin-btn admin-acc__head" data-acc="accResults">
+            <span>🏆 Publish 3-Map Results</span><span class="admin-acc__chev" aria-hidden="true">▾</span>
+          </button>
+          <div class="admin-acc__body" id="accResults" hidden>
+            <p class="admin-acc__hint">Points: 15, 12, 10, 8, 6, 4, 2 for placement #1-#7, plus 1 point per kill. Ties use WWCD, kills, then best placement.</p>
+            <div class="field">
+              <label for="resultsMatch">Match</label>
+              <select id="resultsMatch"></select>
+            </div>
+            <div class="admin-acc__scroll" id="resultsEditor"></div>
+            <div class="results-preview" id="resultsPreview" aria-live="polite"></div>
+            <p class="form__alert" id="resultsAlert" role="alert" hidden></p>
+            <button type="button" class="btn btn--primary admin-acc__cta" id="publishResultsBtn">Publish Top 8</button>
+          </div>
+        </section>
+
         <!-- SITE DETAILS — the public info tiles, prizes and rules shown to everyone
              regardless of match -->
         <section class="admin-acc__item">
@@ -543,6 +581,10 @@
                 <div class="field">
                   <label for="dPrizeKills">🎯 Highest Kills</label>
                   <input type="text" id="dPrizeKills" name="prizeKills" placeholder="₹50" autocomplete="off" />
+                </div>
+                <div class="field field--full">
+                  <label for="dAnnouncement">📢 Live Announcement</label>
+                  <input type="text" id="dAnnouncement" name="announcement" placeholder="Room opens at 8:45 PM. Check in before 9:00 PM." autocomplete="off" />
                 </div>
               </div>
 

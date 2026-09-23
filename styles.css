@@ -961,6 +961,49 @@ body {
   cursor: pointer;
   font: inherit;
 }
+.announcement {
+  max-width: var(--maxw);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px auto -18px;
+  padding: 10px 24px;
+  border-left: 4px solid var(--accent);
+  background: rgba(255, 77, 46, 0.12);
+  color: var(--text);
+}
+.announcement[hidden] { display: none; }
+.announcement__label {
+  flex: 0 0 auto;
+  color: var(--accent-2);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.announcement p { font-weight: 600; }
+.room__checkin { margin: 10px 0 4px; }
+.leaderboard {
+  max-width: var(--maxw);
+  margin: 42px auto 0;
+  padding: 0 24px;
+}
+.leaderboard__table-wrap { overflow-x: auto; border: 1px solid var(--border); background: var(--card); }
+.leaderboard__table, .results-editor { width: 100%; border-collapse: collapse; }
+.leaderboard__table th, .leaderboard__table td, .results-editor th, .results-editor td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+.leaderboard__table th, .results-editor th { color: var(--accent-2); font-family: "Orbitron", sans-serif; font-size: 0.7rem; letter-spacing: 0.6px; }
+.leaderboard__table tr:nth-child(-n+3) td:first-child { color: var(--accent-2); font-weight: 800; }
+.results-editor { min-width: 720px; }
+.results-editor small { color: var(--muted); font-family: "Rajdhani", sans-serif; font-size: 0.8rem; }
+.results-editor__inputs { display: flex; gap: 5px; }
+.results-editor input { width: 58px; padding: 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-soft); color: var(--text); font: inherit; }
+.results-preview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 12px 0; }
+.results-preview span { padding: 7px 9px; border-left: 3px solid var(--accent); background: var(--bg-soft); font-size: 0.9rem; }
+.results-preview b { float: right; color: var(--accent-2); }
+@media (max-width: 520px) {
+  .announcement { align-items: flex-start; flex-direction: column; gap: 4px; margin: 10px 20px -12px; padding: 10px 14px; }
+  .results-preview { grid-template-columns: 1fr; }
+}
 .admin-reg-tools {
   display: flex;
   gap: 8px;
