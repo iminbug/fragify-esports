@@ -309,8 +309,11 @@ async function renderLeaderboard() {
   el("leaderboardSection").hidden = rows.length === 0;
   if (!rows.length) return;
   el("leaderboardMatch").textContent = `${publishedResults.matchName} · Erangel, Miramar, Rondo`;
+  el("leaderboardUpdated").textContent = publishedResults.publishedAt
+    ? `Updated ${new Date(publishedResults.publishedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
+    : "";
   el("leaderboardRows").innerHTML = rows.map((row) => `
-    <tr><td>${row.rank}</td><td>#${String(row.slot).padStart(2, "0")}</td><td>${escapeHtml(row.team)}</td><td>${row.chickenDinners}</td><td>${row.kills}</td><td><strong>${row.points}</strong></td></tr>`).join("");
+    <tr class="leaderboard__rank-${row.rank}"><td><span class="leaderboard__rank">${row.rank}</span></td><td>#${String(row.slot).padStart(2, "0")}</td><td class="leaderboard__team">${escapeHtml(row.team)}</td><td>${row.chickenDinners}</td><td>${row.placementPoints}</td><td>${row.kills}</td><td><strong class="leaderboard__total">${row.points}</strong></td></tr>`).join("");
 }
 
 /* ---------- Live room credentials ---------- */

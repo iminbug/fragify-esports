@@ -116,12 +116,21 @@
     <section class="leaderboard" id="leaderboardSection" hidden>
       <div class="section__head">
         <p class="section__eyebrow">Match Results</p>
-        <h2>Top 8 Leaderboard</h2>
+        <h2><span class="leaderboard__trophy">🏆</span> Top 8 Leaderboard</h2>
         <p id="leaderboardMatch"></p>
+      </div>
+      <div class="leaderboard__meta">
+        <span class="leaderboard__live"><i></i> Published Results</span>
+        <span id="leaderboardUpdated"></span>
+      </div>
+      <div class="leaderboard__points" aria-label="Point system">
+        <span class="leaderboard__points-label">Point System</span>
+        <span>Placement: 1st 15 · 2nd 12 · 3rd 10 · 4th 8 · 5th 6 · 6th 4 · 7th 2</span>
+        <span>Kills: +1 each</span>
       </div>
       <div class="leaderboard__table-wrap">
         <table class="leaderboard__table">
-          <thead><tr><th>Rank</th><th>Slot</th><th>Team</th><th>WWCD</th><th>Kills</th><th>Points</th></tr></thead>
+          <thead><tr><th>Rank</th><th>Slot</th><th>Team</th><th>WWCD</th><th>Placement</th><th>Kills</th><th>Total</th></tr></thead>
           <tbody id="leaderboardRows"></tbody>
         </table>
       </div>
