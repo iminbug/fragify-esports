@@ -1419,7 +1419,7 @@ function renderResultsRows() {
   updateResultsPreview();
 }
 
-const RESULT_POINTS = { 1: 15, 2: 12, 3: 10, 4: 8, 5: 6, 6: 4, 7: 2 };
+const RESULT_POINTS = { 1: 10, 2: 6, 3: 5, 4: 4, 5: 3, 6: 2, 7: 1, 8: 1 };
 
 function updateResultsPreview() {
   const match = adminMatches.find((entry) => entry.id === el("resultsMatch").value);

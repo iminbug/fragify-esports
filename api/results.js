@@ -2,7 +2,7 @@ import { kv } from "@vercel/kv";
 import { matchKeys, normalizeMatchId, getMatch, getAllMatches, activeRegistrations } from "../lib/matches.js";
 
 const MAPS = ["Erangel", "Miramar", "Rondo"];
-const PLACEMENT_POINTS = { 1: 15, 2: 12, 3: 10, 4: 8, 5: 6, 6: 4, 7: 2 };
+const PLACEMENT_POINTS = { 1: 10, 2: 6, 3: 5, 4: 4, 5: 3, 6: 2, 7: 1, 8: 1 };
 
 function numberInRange(value, min, max) {
   const number = Number(value);
