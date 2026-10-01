@@ -992,18 +992,6 @@ function renderDetails() {
     tiles.length === 0 && prizes.length === 0 && rules.length === 0;
   el("announcementText").textContent = tournament.announcement || "";
   el("announcementBar").hidden = !tournament.announcement;
-
-  // The kill switch: when on, the overlay covers the page and — just in case CSS
-  // alone doesn't catch every edge case — the real content is hidden underneath it.
-  // An admin (?admin=true) always bypasses it — otherwise turning maintenance on
-  // would lock the admin out of the one panel that can turn it back off.
-  const isAdminView = Boolean(new URLSearchParams(window.location.search).get("admin"));
-  const inMaintenance = Boolean(tournament.maintenanceMode) && !isAdminView;
-  el("maintenanceOverlay").hidden = !inMaintenance;
-  el("maintenanceMessage").textContent =
-    tournament.maintenanceMessage || "The site is under maintenance. Please check back shortly.";
-  document.querySelector("main").hidden = inMaintenance;
-  document.querySelector(".footer").hidden = inMaintenance;
 }
 
 async function loadDetails() {
@@ -1960,8 +1948,6 @@ function prefillDetailsForm() {
     ? tournament.rules.join("\n")
     : "";
   detailsForm.announcement.value = tournament.announcement || "";
-  detailsForm.maintenanceMode.checked = Boolean(tournament.maintenanceMode);
-  detailsForm.maintenanceMessage.value = tournament.maintenanceMessage || "";
 }
 
 detailsForm.addEventListener("submit", async (e) => {
@@ -1978,8 +1964,6 @@ detailsForm.addEventListener("submit", async (e) => {
     .map((line) => line.trim())
     .filter(Boolean);
   payload.announcement = detailsForm.announcement.value.trim();
-  payload.maintenanceMode = detailsForm.maintenanceMode.checked;
-  payload.maintenanceMessage = detailsForm.maintenanceMessage.value.trim();
 
   const saveBtn = el("detailsSaveBtn");
   saveBtn.disabled = true;

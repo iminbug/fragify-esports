@@ -1150,31 +1150,6 @@ body {
   .dash-cards { grid-template-columns: 1fr; }
 }
 
-/* ---------- Maintenance overlay ---------- */
-/* Sits above the public page but below the admin panel (z-index 200) and its modals
-   (z-index 300) — the admin.js query-param check already bypasses this overlay
-   entirely, but a lower z-index here means a stray render order can never lock an
-   admin out of the one screen that turns maintenance back off. */
-.maintenance {
-  position: fixed; inset: 0; z-index: 150;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; text-align: center; padding: 24px;
-  background: var(--bg);
-}
-.maintenance__icon { font-size: 3rem; margin-bottom: 6px; }
-.maintenance h1 {
-  font-family: "Orbitron", sans-serif; font-size: clamp(1.4rem, 4vw, 2rem);
-}
-.maintenance p { max-width: 480px; color: var(--muted); font-size: 1.05rem; }
-.maintenance-toggle { margin-top: 4px; }
-.maintenance-toggle__row {
-  display: flex; align-items: center; gap: 10px; cursor: pointer;
-  font-weight: 700;
-}
-.maintenance-toggle__row input {
-  width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer;
-}
-
 /* ---------- Google auth (nav) ---------- */
 .auth {
   display: flex; align-items: center; gap: 10px;
