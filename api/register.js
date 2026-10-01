@@ -9,6 +9,7 @@ import {
   nextFreeSlot,
   isRoomLive,
   addUserRegistration,
+  addUserRegistration,
 } from "../lib/matches.js";
 import { sessionFromRequest } from "../lib/session.js";
 
@@ -109,6 +110,23 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     const { matchId, teamName, leaderName, phone, members: rawMembers } = req.body || {};
+
+    // The admin's kill switch for the whole site — checked server-side too, since the
+    // public form only hides itself and a direct POST must not slip through.
+    const tournament = (await kv.get("config:tournament")) || {};
+    if (tournament.maintenanceMode) {
+      return res.status(503).json({
+        error: tournament.maintenanceMessage || "Registration is paused for maintenance. Please check back shortly.",
+      });
+    }
+
+    // A team is always captained by a signed-in Google account now — that identity
+    // is what the dashboard and the room/payment/check-in endpoints use to prove
+    // ownership later, instead of a password the captain has to keep safe.
+    const session = sessionFromRequest(req);
+    if (!session) {
+      return res.status(401).json({ error: "Sign in with Google before registering a team" });
+    }
 
     // A team is always captained by a signed-in Google account now — that identity
     // is what the dashboard and the room/payment/check-in endpoints use to prove

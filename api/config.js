@@ -58,6 +58,18 @@ function cleanTournament(raw) {
     if (rules.length) tournament.rules = rules;
   }
 
+  // A kill switch for the whole site, not just one match — an admin flips this
+  // while editing match data or recovering from an incident, with a message the
+  // public page shows instead of everything else.
+  tournament.maintenanceMode = Boolean(raw.maintenanceMode);
+  const maintenanceMessage = String(raw.maintenanceMessage ?? "").trim().replace(/\s+/g, " ");
+  if (maintenanceMessage) {
+    if (maintenanceMessage.length > MAX_RULE_LEN) {
+      return { error: `Maintenance message is too long (max ${MAX_RULE_LEN} characters)` };
+    }
+    tournament.maintenanceMessage = maintenanceMessage;
+  }
+
   return { tournament };
 }
 
