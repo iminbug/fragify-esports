@@ -49,19 +49,34 @@
       </div>
       <span class="nav__name">FRAGIFY<span class="accent"> ESPORTS</span><span class="nav__tag">BETA</span></span>
     </div>
-    <div class="nav__status" id="navStatus">
-      <span class="dot"></span>
-      <span id="navStatusText">Registration Live</span>
-    </div>
-    <div class="auth" id="authArea">
-      <div id="googleSignInBtn" class="auth__btn"></div>
-      <div class="auth__signed-in" id="authSignedIn" hidden>
-        <img class="auth__avatar" id="authUserAvatar" alt="" referrerpolicy="no-referrer" hidden />
-        <span class="auth__name" id="authUserName"></span>
-        <button type="button" class="auth__signout" id="authSignOutBtn">Sign out</button>
+
+    <button type="button" class="nav__burger" id="navBurger" aria-label="Open menu" aria-expanded="false" aria-controls="navDrawer">
+      <span></span><span></span><span></span>
+    </button>
+
+    <nav class="nav__drawer" id="navDrawer" aria-label="Site navigation">
+      <div class="nav__drawer-links">
+        <a href="#register" class="nav__link" data-nav-close>Register</a>
+        <a href="#detailsSection" class="nav__link" data-nav-close>Details</a>
+        <a href="#leaderboardSection" class="nav__link" data-nav-close>Leaderboard</a>
+        <a href="#connect" class="nav__link" data-nav-close>Connect</a>
+        <button type="button" class="nav__link nav__link--accent" id="navMyTeamsBtn" hidden>🗂️ My Teams</button>
       </div>
-    </div>
+      <div class="nav__status" id="navStatus">
+        <span class="dot"></span>
+        <span id="navStatusText">Registration Live</span>
+      </div>
+      <div class="auth" id="authArea">
+        <div id="googleSignInBtn" class="auth__btn"></div>
+        <div class="auth__signed-in" id="authSignedIn" hidden>
+          <img class="auth__avatar" id="authUserAvatar" alt="" referrerpolicy="no-referrer" hidden />
+          <span class="auth__name" id="authUserName"></span>
+          <button type="button" class="auth__signout" id="authSignOutBtn">Sign out</button>
+        </div>
+      </div>
+    </nav>
   </header>
+  <div class="nav__backdrop" id="navBackdrop" hidden></div>
 
   <main>
     <section class="announcement" id="announcementBar" hidden>
@@ -100,19 +115,6 @@
         <a href="https://chat.whatsapp.com/ELLWjH90FlMI4vjxHe5sR0" target="_blank" rel="noopener"
            class="btn btn--whatsapp">💬 Join Community</a>
       </div>
-    </section>
-
-    <!-- MY TEAMS — the centralized home for everything a signed-in captain owns, across
-         every match: status, entry-fee state, and the WhatsApp invite the moment it
-         unlocks. No more hunting for a DM from an admin. -->
-    <section class="dashboard" id="dashboardSection" hidden>
-      <div class="section__head">
-        <p class="section__eyebrow">Signed in with Google</p>
-        <h2>🗂️ My Teams</h2>
-        <p>Every team you've registered, in one place — including your community invite as soon as it unlocks.</p>
-      </div>
-      <div class="dash-cards" id="dashboardCards"></div>
-      <p class="dash-empty" id="dashboardEmpty" hidden>You haven't registered a team yet — do that below and it'll show up here.</p>
     </section>
 
     <!-- INFO CARDS -->
@@ -470,6 +472,26 @@
       </div>
     </section>
   </main>
+
+  <!-- MY TEAMS — a dedicated screen, not an inline section: the drawer's "My Teams"
+       link and a successful Google sign-in both switch here, swapping out <main>
+       instead of scrolling to it. Centralizes everything a signed-in captain owns
+       across every match, including the WhatsApp invite the moment it unlocks —
+       no more hunting for a DM from an admin. -->
+  <section class="dashboard" id="dashboardSection" hidden>
+    <div class="dashboard__inner">
+      <div class="dashboard__head-row">
+        <div class="section__head">
+          <p class="section__eyebrow">Signed in with Google</p>
+          <h2>🗂️ My Teams</h2>
+          <p>Every team you've registered, in one place — including your community invite as soon as it unlocks.</p>
+        </div>
+        <button type="button" class="dashboard__back" id="dashboardBackBtn">← Back to site</button>
+      </div>
+      <div class="dash-cards" id="dashboardCards"></div>
+      <p class="dash-empty" id="dashboardEmpty" hidden>You haven't registered a team yet — do that on the site and it'll show up here.</p>
+    </div>
+  </section>
 
   <!-- SUCCESS MODAL -->
   <div class="modal" id="successModal" hidden>

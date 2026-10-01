@@ -401,6 +401,7 @@ function renderAuthUI() {
   const signedIn = Boolean(session?.token);
   el("googleSignInBtn").hidden = signedIn;
   el("authSignedIn").hidden = !signedIn;
+  el("navMyTeamsBtn").hidden = !signedIn;
   if (signedIn) {
     el("authUserName").textContent = session.user?.name || session.user?.email || "Signed in";
     const avatar = el("authUserAvatar");
@@ -411,8 +412,46 @@ function renderAuthUI() {
       avatar.hidden = true;
     }
   }
-  dashboardSection.hidden = !signedIn;
+  // Signing out should never leave the dedicated My Teams screen on display —
+  // there would be nothing left for it to show.
+  if (!signedIn) dashboardSection.hidden = true;
 }
+
+/* ---------- Nav drawer (mobile) ---------- */
+const navBurger = el("navBurger");
+const navDrawer = el("navDrawer");
+const navBackdrop = el("navBackdrop");
+
+function setDrawerOpen(open) {
+  navDrawer.classList.toggle("is-open", open);
+  navBackdrop.hidden = !open;
+  navBurger.setAttribute("aria-expanded", String(open));
+  document.body.style.overflow = open ? "hidden" : "";
+}
+navBurger.addEventListener("click", () => setDrawerOpen(!navDrawer.classList.contains("is-open")));
+navBackdrop.addEventListener("click", () => setDrawerOpen(false));
+for (const link of navDrawer.querySelectorAll("[data-nav-close]")) {
+  link.addEventListener("click", () => setDrawerOpen(false));
+}
+
+/* ---------- My Teams: dedicated view ---------- */
+/* A separate screen rather than an inline section — swaps out <main> instead of
+   just scrolling to it, so a signed-in captain lands somewhere that's clearly
+   "their" space the moment they sign in. */
+function showDashboardView() {
+  document.querySelector("main").hidden = true;
+  dashboardSection.hidden = false;
+  window.scrollTo({ top: 0 });
+}
+function showPublicView() {
+  dashboardSection.hidden = true;
+  document.querySelector("main").hidden = false;
+}
+el("navMyTeamsBtn").addEventListener("click", () => {
+  setDrawerOpen(false);
+  showDashboardView();
+});
+el("dashboardBackBtn").addEventListener("click", showPublicView);
 
 async function handleGoogleCredential(response) {
   try {
@@ -421,6 +460,9 @@ async function handleGoogleCredential(response) {
     renderAuthUI();
     await renderDashboard();
     await applyPayment();
+    // The ask this solves: land the captain on their own screen the moment they
+    // sign in, instead of leaving them to scroll around and find it.
+    showDashboardView();
   } catch (err) {
     console.error("Google sign-in failed:", err);
     alert("Could not complete Google sign-in. Please try again.");
@@ -452,6 +494,7 @@ el("authSignOutBtn").addEventListener("click", () => {
   clearAuth();
   window.google?.accounts?.id?.disableAutoSelect();
   renderAuthUI();
+  showPublicView();
 });
 
 function dashboardStatusLabel(team) {
@@ -505,7 +548,12 @@ function dashboardCard(team) {
     btn.type = "button";
     btn.className = "btn btn--ghost dash-card__btn";
     btn.textContent = "Scroll to Room Details";
-    btn.addEventListener("click", () => el("roomBanner")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    // The room card lives on the public page, which is hidden while this view is
+    // active — switch back first or the scroll would target an invisible element.
+    btn.addEventListener("click", () => {
+      showPublicView();
+      el("roomBanner")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     actions.appendChild(btn);
   }
 
@@ -518,7 +566,9 @@ async function renderDashboard() {
     dashboardSection.hidden = true;
     return;
   }
-  dashboardSection.hidden = false;
+  // Content only — visibility of the view itself is owned by showDashboardView()/
+  // showPublicView() now, so a background refresh never yanks the screen out from
+  // under someone who navigated back to the public site.
 
   const wrap = el("dashboardCards");
   try {
@@ -1088,7 +1138,10 @@ form.addEventListener("submit", async (e) => {
   setFormAlert("");
 
   if (!getGoogleSession()?.token) {
-    setFormAlert("Sign in with Google above before registering your team.");
+    setFormAlert("Sign in with Google first — tap the menu button and use Sign in with Google.");
+    // On mobile the button lives inside the closed drawer, off-screen — opening it
+    // is what actually brings it into view, not a scroll.
+    setDrawerOpen(true);
     el("googleSignInBtn")?.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
