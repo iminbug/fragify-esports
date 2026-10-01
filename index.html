@@ -36,6 +36,15 @@
   <div class="bg-glow bg-glow--2" aria-hidden="true"></div>
   <div class="bg-drop" aria-hidden="true">📦</div>
 
+  <!-- MAINTENANCE — an admin kill switch for the whole public site. The overlay sits
+       above everything; ?admin=true still reaches the admin panel underneath it so
+       maintenance can be turned back off. -->
+  <div class="maintenance" id="maintenanceOverlay" hidden>
+    <div class="maintenance__icon">🛠️</div>
+    <h1>We'll be right back</h1>
+    <p id="maintenanceMessage">The site is under maintenance. Please check back shortly.</p>
+  </div>
+
   <header class="nav">
     <div class="nav__brand">
       <div class="nav__icon">
@@ -615,6 +624,18 @@
                   <label for="dAnnouncement">📢 Live Announcement</label>
                   <input type="text" id="dAnnouncement" name="announcement" placeholder="Room opens at 8:45 PM. Check in before 9:00 PM." autocomplete="off" />
                 </div>
+              </div>
+
+              <div class="field field--full maintenance-toggle">
+                <label class="maintenance-toggle__row">
+                  <input type="checkbox" id="dMaintenanceMode" name="maintenanceMode" />
+                  <span>🛠️ Put the whole site in maintenance mode</span>
+                </label>
+                <p class="field__help">Visitors see a maintenance screen instead of the site. The admin panel (this page) still works.</p>
+              </div>
+              <div class="field">
+                <label for="dMaintenanceMessage">Maintenance Message <span>(optional)</span></label>
+                <input type="text" id="dMaintenanceMessage" name="maintenanceMessage" placeholder="Back online at 9 PM for match day." autocomplete="off" />
               </div>
 
               <div class="field">
