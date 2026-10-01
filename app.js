@@ -11,9 +11,44 @@ const CONFIG = {
   lowSlotThreshold: 4,
 };
 
+/* Must match the Client ID configured as GOOGLE_CLIENT_ID on the server (api/auth.js) —
+   a Google ID token is only ever valid for the one app it was issued to. */
+const GOOGLE_CLIENT_ID = "70511459208-delvaq16hpugufqofilhjp9ktnsgf9ns.apps.googleusercontent.com";
+const GOOGLE_SESSION_KEY = "fragify:google";
+
+function getGoogleSession() {
+  try {
+    const raw = localStorage.getItem(GOOGLE_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setGoogleSession(token, user) {
+  try {
+    localStorage.setItem(GOOGLE_SESSION_KEY, JSON.stringify({ token, user }));
+  } catch {
+    /* localStorage can be unavailable in private tabs — sign-in still works for the
+       current page life, it just won't survive a refresh. */
+  }
+}
+
+function clearGoogleSession() {
+  try { localStorage.removeItem(GOOGLE_SESSION_KEY); } catch { /* nothing to clear */ }
+}
+
 /* ---------- API ---------- */
+/* Every call rides the signed-in captain's session when one exists — this is what
+   lets /api/register, /api/room, /api/payment and /api/checkin recognise "your own
+   team" without a password, and it's what makes /api/dashboard possible at all. */
+function authHeaders() {
+  const session = getGoogleSession();
+  return session?.token ? { Authorization: `Bearer ${session.token}` } : {};
+}
+
 async function apiGet(path) {
-  const res = await fetch(path);
+  const res = await fetch(path, { headers: authHeaders() });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Request failed");
   return json;
@@ -22,7 +57,7 @@ async function apiGet(path) {
 async function apiPost(path, body) {
   const res = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   const json = await res.json();
@@ -32,9 +67,12 @@ async function apiPost(path, body) {
 
 const API = {
   slots: () => apiGet("/api/register"),
+  results: (matchId) => apiGet(matchId ? `/api/results?matchId=${encodeURIComponent(matchId)}` : "/api/results"),
+  publishResults: (matchId, rows, adminKey) => apiPost("/api/results", { matchId, rows, adminKey }),
   config: () => apiGet("/api/config"),
   register: (data) => apiPost("/api/register", data),
   room: (teamId, password) => apiPost("/api/room", { teamId, password }),
+  checkIn: (teamId, password) => apiPost("/api/checkin", { teamId, password }),
   payment: (teamId, password, utr, receipt) =>
     apiPost("/api/payment", { teamId, password, utr, receipt }),
   testNotify: (adminKey) =>
@@ -55,6 +93,8 @@ const API = {
     apiPost("/api/admin", { action: "reset", matchId, adminKey }),
   verifyPayment: (matchId, slot, adminKey) =>
     apiPost("/api/admin", { action: "verify", matchId, slot, adminKey }),
+  approveRegistration: (matchId, slot, adminKey) =>
+    apiPost("/api/admin", { action: "approve", matchId, slot, adminKey }),
   rejectPayment: (matchId, slot, adminKey) =>
     apiPost("/api/admin", { action: "reject", matchId, slot, adminKey }),
   cancelRegistration: (matchId, slot, adminKey) =>
@@ -63,6 +103,8 @@ const API = {
     apiPost("/api/admin", { action: "add", matchId, ...data, adminKey }),
   moveRegistration: (matchId, slot, toSlot, adminKey) =>
     apiPost("/api/admin", { action: "move", matchId, slot, toSlot, adminKey }),
+  googleSignIn: (idToken) => apiPost("/api/auth", { idToken }),
+  dashboard: () => apiGet("/api/dashboard"),
 };
 
 /* ---------- DOM refs ---------- */
@@ -77,6 +119,7 @@ const closedState = el("closedState");
 const submitBtn = el("submitBtn");
 const heroCta = el("heroCta");
 const modal = el("successModal");
+const dashboardSection = el("dashboardSection");
 
 /* ---------- Match state ---------- */
 /* The public shape of every match, straight from /api/register:
@@ -242,6 +285,7 @@ async function renderSlots() {
   renderBoards();
   renderMatchChoice();
   syncPaymentSection();
+  renderLeaderboard();
 
   // The hero meter aggregates every match — it answers "how busy is match day",
   // while the per-match numbers live on the choice cards and the boards.
@@ -289,6 +333,27 @@ async function renderSlots() {
   }
 }
 
+let publishedResults = null;
+let leaderboardRequestId = null;
+
+async function renderLeaderboard() {
+  try {
+    const { results } = await API.results(leaderboardRequestId);
+    publishedResults = results;
+  } catch {
+    publishedResults = null;
+  }
+  const rows = publishedResults?.leaderboard || [];
+  el("leaderboardSection").hidden = rows.length === 0;
+  if (!rows.length) return;
+  el("leaderboardMatch").textContent = `${publishedResults.matchName} · Erangel, Miramar, Rondo`;
+  el("leaderboardUpdated").textContent = publishedResults.publishedAt
+    ? `Updated ${new Date(publishedResults.publishedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
+    : "";
+  el("leaderboardRows").innerHTML = rows.map((row) => `
+    <tr class="leaderboard__rank-${row.rank}"><td><span class="leaderboard__rank">${row.rank}</span></td><td>#${String(row.slot).padStart(2, "0")}</td><td class="leaderboard__team">${escapeHtml(row.team)}</td><td>${row.chickenDinners}</td><td>${row.placementPoints}</td><td>${row.kills}</td><td><strong class="leaderboard__total">${row.points}</strong></td></tr>`).join("");
+}
+
 /* ---------- Live room credentials ---------- */
 /* The public slots endpoint only says whether a room is live somewhere. The credentials
    come from /api/room, which wants the Team ID and password issued at registration —
@@ -307,14 +372,16 @@ function savedAuth() {
   try {
     const raw = sessionStorage.getItem(AUTH_KEY);
     const auth = raw ? JSON.parse(raw) : null;
-    return auth && auth.teamId && auth.password ? auth : null;
+    // A Google-registered team has no password — the Authorization header (added by
+    // apiPost) is what proves ownership for them, so only the Team ID is required here.
+    return auth && auth.teamId ? auth : null;
   } catch {
     return null;
   }
 }
 function saveAuth(teamId, password) {
   try {
-    sessionStorage.setItem(AUTH_KEY, JSON.stringify({ teamId, password }));
+    sessionStorage.setItem(AUTH_KEY, JSON.stringify({ teamId, password: password || null }));
   } catch {
     /* private mode — the team just re-enters the details, no harm done */
   }
@@ -322,6 +389,157 @@ function saveAuth(teamId, password) {
 function clearAuth() {
   try { sessionStorage.removeItem(AUTH_KEY); } catch { /* nothing to clear */ }
 }
+
+/* ---------- Google sign-in & centralized dashboard ---------- */
+/* This is the fix for "the community link never reaches the team": once signed in,
+   every team the captain owns \u2014 across every match \u2014 shows up here with its
+   current status, including the WhatsApp invite the moment it unlocks. No admin has
+   to remember to message anyone. */
+
+function renderAuthUI() {
+  const session = getGoogleSession();
+  const signedIn = Boolean(session?.token);
+  el("googleSignInBtn").hidden = signedIn;
+  el("authSignedIn").hidden = !signedIn;
+  if (signedIn) {
+    el("authUserName").textContent = session.user?.name || session.user?.email || "Signed in";
+    const avatar = el("authUserAvatar");
+    if (session.user?.picture) {
+      avatar.src = session.user.picture;
+      avatar.hidden = false;
+    } else {
+      avatar.hidden = true;
+    }
+  }
+  dashboardSection.hidden = !signedIn;
+}
+
+async function handleGoogleCredential(response) {
+  try {
+    const { token, user } = await API.googleSignIn(response.credential);
+    setGoogleSession(token, user);
+    renderAuthUI();
+    await renderDashboard();
+    await applyPayment();
+  } catch (err) {
+    console.error("Google sign-in failed:", err);
+    alert("Could not complete Google sign-in. Please try again.");
+  }
+}
+
+function initGoogleSignIn(attempt = 0) {
+  // The GSI script tag loads with `async defer`, so it can still be mid-flight
+  // when this runs — retry briefly rather than silently never showing the button.
+  if (!window.google?.accounts?.id) {
+    if (attempt > 40) return; // ~6s — the script likely failed to load (blocked, offline)
+    setTimeout(() => initGoogleSignIn(attempt + 1), 150);
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential,
+  });
+  google.accounts.id.renderButton(el("googleSignInBtn"), {
+    theme: "filled_black",
+    size: "large",
+    shape: "pill",
+    text: "signin_with",
+  });
+}
+
+el("authSignOutBtn").addEventListener("click", () => {
+  clearGoogleSession();
+  clearAuth();
+  window.google?.accounts?.id?.disableAutoSelect();
+  renderAuthUI();
+});
+
+function dashboardStatusLabel(team) {
+  if (team.checkedIn) return { text: "Checked In", tone: "ok" };
+  if (!team.approved) return { text: "Awaiting Admin Approval", tone: "pending" };
+  if (team.entryFeePending) return { text: "Entry Fee Pending", tone: "pending" };
+  if (team.paymentStatus === "submitted") return { text: "Payment Under Review", tone: "pending" };
+  return { text: "Confirmed", tone: "ok" };
+}
+
+function dashboardCard(team) {
+  const status = dashboardStatusLabel(team);
+  const card = document.createElement("div");
+  card.className = "dash-card";
+  card.innerHTML = `
+    <div class="dash-card__head">
+      <div>
+        <p class="dash-card__team">${escapeHtml(team.teamName)}</p>
+        <p class="dash-card__match">${escapeHtml(team.matchName)}${team.matchTime ? " · " + escapeHtml(team.matchTime) : ""} · Slot #${String(team.slot).padStart(2, "0")}</p>
+      </div>
+      <span class="dash-card__status dash-card__status--${status.tone}">${status.text}</span>
+    </div>
+    <p class="dash-card__id">${escapeHtml(team.teamId)}</p>
+    <div class="dash-card__actions"></div>
+  `;
+
+  const actions = card.querySelector(".dash-card__actions");
+
+  if (team.waLink) {
+    const link = document.createElement("a");
+    link.href = team.waLink;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.className = "btn btn--whatsapp dash-card__btn";
+    link.textContent = "💬 Open Community Invite";
+    actions.appendChild(link);
+  } else if (!team.approved) {
+    const note = document.createElement("p");
+    note.className = "dash-card__note";
+    note.textContent = "The community invite unlocks once an admin approves this team.";
+    actions.appendChild(note);
+  } else if (team.entryFeePending) {
+    const note = document.createElement("p");
+    note.className = "dash-card__note";
+    note.textContent = "Pay the entry fee below to unlock the community invite.";
+    actions.appendChild(note);
+  }
+
+  if (team.roomLive && !team.checkedIn) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn--ghost dash-card__btn";
+    btn.textContent = "Scroll to Room Details";
+    btn.addEventListener("click", () => el("roomBanner")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    actions.appendChild(btn);
+  }
+
+  return card;
+}
+
+async function renderDashboard() {
+  const session = getGoogleSession();
+  if (!session?.token) {
+    dashboardSection.hidden = true;
+    return;
+  }
+  dashboardSection.hidden = false;
+
+  const wrap = el("dashboardCards");
+  try {
+    const { teams } = await API.dashboard();
+    wrap.textContent = "";
+    if (!teams || teams.length === 0) {
+      el("dashboardEmpty").hidden = false;
+      return;
+    }
+    el("dashboardEmpty").hidden = true;
+    for (const team of teams) wrap.appendChild(dashboardCard(team));
+  } catch (err) {
+    // An expired or invalid session shouldn't nag the team on every poll — sign them
+    // out quietly and let them sign in again when they're ready.
+    if (/sign in|session/i.test(err.message)) {
+      clearGoogleSession();
+      renderAuthUI();
+    }
+  }
+}
+
 
 function setUnlockAlert(msg) {
   const alert = el("unlockAlert");
@@ -429,6 +647,27 @@ el("roomLockBtn").addEventListener("click", () => {
   showRoomGate();
 });
 
+el("checkInBtn").addEventListener("click", async () => {
+  const auth = savedAuth();
+  if (!auth) return showRoomGate("Your session has expired — unlock the room again.");
+  const button = el("checkInBtn");
+  const status = el("checkInStatus");
+  button.disabled = true;
+  button.textContent = "Checking in…";
+  status.hidden = true;
+  try {
+    const result = await API.checkIn(auth.teamId, auth.password);
+    status.textContent = `✅ ${result.team} checked in for ${result.match}.`;
+    status.hidden = false;
+    button.textContent = "Checked In";
+  } catch (err) {
+    status.textContent = "❌ " + err.message;
+    status.hidden = false;
+    button.disabled = false;
+    button.textContent = "Check In for Match";
+  }
+});
+
 /* ---------- Entry fee ---------- */
 /* The whole section only exists when at least one match has a fee. A team unlocks it
    with the same Team ID + password as the room card — the server answers with *their
@@ -475,7 +714,9 @@ function showPayPanel(info) {
   statusEl.classList.remove("is-pending", "is-submitted", "is-verified");
 
   if (status === "verified") {
-    statusEl.textContent = "✅ Payment verified — your slot is confirmed.";
+    statusEl.textContent = info.approved
+      ? "✅ Registration approved — your slot is confirmed."
+      : "⏳ Payment is verified. Your registration is waiting for admin approval.";
     statusEl.classList.add("is-verified");
   } else if (status === "submitted") {
     statusEl.textContent = info.receiptSubmitted
@@ -491,7 +732,7 @@ function showPayPanel(info) {
      is what decides that — an unverified team simply gets no link in the response, so
      there is nothing here to reveal early. */
   const waBtn = el("payWaLink");
-  const waHref = status === "verified" ? normalizeWaLink(info.waLink) : null;
+  const waHref = status === "verified" && info.approved ? normalizeWaLink(info.waLink) : null;
   if (waHref) {
     waBtn.href = waHref;
     waBtn.hidden = false;
@@ -749,6 +990,8 @@ function renderDetails() {
   // Nothing configured yet — keep the whole section out of the page.
   el("detailsSection").hidden =
     tiles.length === 0 && prizes.length === 0 && rules.length === 0;
+  el("announcementText").textContent = tournament.announcement || "";
+  el("announcementBar").hidden = !tournament.announcement;
 }
 
 async function loadDetails() {
@@ -844,6 +1087,12 @@ form.addEventListener("submit", async (e) => {
   e.preventDefault();
   setFormAlert("");
 
+  if (!getGoogleSession()?.token) {
+    setFormAlert("Sign in with Google above before registering your team.");
+    el("googleSignInBtn")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+
   const data = {
     matchId: selectedMatchId,
     teamName: form.teamName.value.trim(),
@@ -867,6 +1116,7 @@ form.addEventListener("submit", async (e) => {
     // The team is now logged in, so refresh the entry-fee panel — it should be
     // unlocked and showing their Pay button by the time they close the modal.
     await applyPayment();
+    await renderDashboard();
     submitBtn.disabled = false;
     submitBtn.textContent = "Lock My Slot →";
   }
@@ -895,11 +1145,10 @@ function showSuccess(teamName, res) {
     ? res.match.name + (res.match.matchTime ? " · " + res.match.matchTime : "")
     : "";
   el("credId").textContent = res.teamId;
-  el("credPass").textContent = res.password;
 
-  // The team just proved who they are — remember it so the room card unlocks
-  // itself for them without a second login.
-  saveAuth(res.teamId, res.password);
+  // Ownership now rests on the signed-in Google account, not a password — remember
+  // the Team ID so the room card can find this team's status without asking again.
+  saveAuth(res.teamId, null);
 
   const waBtn = el("waLink");
   const link = normalizeWaLink(res.waLink);
@@ -914,8 +1163,8 @@ function showSuccess(teamName, res) {
     waBtn.removeAttribute("href");
     waBtn.hidden = true;
     el("modalHint").textContent = res.paymentDue
-      ? "Save your Team ID & Password — screenshot this. The WhatsApp community link appears once your entry fee is verified."
-      : "Save your Team ID & Password — screenshot this. The WhatsApp community link will be shared with you shortly.";
+      ? "Save your Team ID & Password — screenshot this. After payment verification, an admin must approve your registration before the community link unlocks."
+      : "Save your Team ID & Password — screenshot this. Your slot is reserved and awaits admin approval; the community link unlocks after approval.";
   }
 
   const payNote = el("modalPayNote");
@@ -930,8 +1179,9 @@ function showSuccess(teamName, res) {
     el("modalClose").textContent = "Go to payment →";
     pendingPayment = true;
   } else {
-    el("modalTitle").lastChild.textContent = " is yours";
-    payNote.hidden = true;
+    el("modalTitle").lastChild.textContent = " reserved";
+    payNote.textContent = "⏳ Your registration is waiting for admin approval. The slot and community link are confirmed after approval.";
+    payNote.hidden = false;
     el("modalClose").textContent = "Done";
     pendingPayment = false;
   }
@@ -1008,6 +1258,7 @@ const ACC_LOADERS = {
   accMatches: () => renderMatchList(),
   accRegs: () => renderRegistrations(),
   accDetails: () => prefillDetailsForm(),
+  accResults: () => renderResultsEditor(),
 };
 
 async function openAccSection(id) {
@@ -1242,9 +1493,15 @@ function registrationRow(matchId, r) {
         return `<button type="button" class="receipt-link" data-receipt-key="${escapeHtml(key)}">🧾 View payment screenshot</button><br/>`;
       })()
     : "";
+  const checkIn = r.checked_in_at
+    ? '<span class="reg-badge is-verified">CHECKED IN</span><br/>'
+    : "";
 
   // A team that has paid needs no verify button; one that hasn't can't be rejected.
   const actions = [
+    status === "verified" && r.approval_status === "pending"
+      ? `<button class="reg-act reg-act--ok" data-act="approve" data-match="${matchId}" data-slot="${r.slot_number}">✅ Approve Team</button>`
+      : "",
     `<button class="reg-act" data-act="move" data-match="${matchId}" data-slot="${r.slot_number}">↔️ Move Slot</button>`,
     status !== "verified"
       ? `<button class="reg-act reg-act--ok" data-act="verify" data-match="${matchId}" data-slot="${r.slot_number}">✅ Verify</button>`
@@ -1262,7 +1519,7 @@ function registrationRow(matchId, r) {
     Team: ${escapeHtml(r.team_name)}<br/>
     Leader: ${escapeHtml(r.leader_name)}<br/>
     ${squad}Phone: ${escapeHtml(r.phone)}<br/>
-    ${utr}${receipt}ID: ${escapeHtml(r.team_id)} · Pass: ${escapeHtml(r.password)}
+    ${checkIn}${utr}${receipt}ID: ${escapeHtml(r.team_id)} · Pass: ${escapeHtml(r.password)}
     <div class="reg-acts">${actions}</div>
   </div>`;
 }
@@ -1284,11 +1541,13 @@ function renderRegistrationList() {
   const allRegistrations = adminMatches.flatMap((match) => match.registrations);
   const verified = allRegistrations.filter((registration) => (registration.payment_status || "verified") === "verified").length;
   const submitted = allRegistrations.filter((registration) => registration.payment_status === "submitted").length;
+  const checkedIn = allRegistrations.filter((registration) => registration.checked_in_at).length;
   const available = adminMatches.reduce((total, match) => total + Math.max(0, match.totalSlots - match.registrations.length), 0);
   el("regSummary").innerHTML = [
     `<span><strong>${allRegistrations.length}</strong> teams</span>`,
     `<span class="is-good"><strong>${verified}</strong> verified</span>`,
     `<span class="is-warn"><strong>${submitted}</strong> proofs waiting</span>`,
+    `<span class="is-good"><strong>${checkedIn}</strong> checked in</span>`,
     `<span><strong>${available}</strong> slots open</span>`,
   ].join("");
   el("regList").innerHTML = adminMatches.length
@@ -1312,6 +1571,118 @@ function renderRegistrationList() {
       }).join("")
     : "<p style='text-align:center;color:var(--muted)'>No matches yet — create one in Manage Matches</p>";
 }
+
+/* ---------- Admin: 3-map leaderboard ---------- */
+const RESULT_MAPS = ["Erangel", "Miramar", "Rondo"];
+
+function setResultsAlert(message) {
+  const alert = el("resultsAlert");
+  alert.textContent = message || "";
+  alert.hidden = !message;
+}
+
+function resultInput(slot, map, field, max) {
+  return `<input type="number" min="${field === "placement" ? 1 : 0}" max="${max}" data-result-slot="${slot}" data-result-map="${map}" data-result-field="${field}" inputmode="numeric" required />`;
+}
+
+async function renderResultsEditor() {
+  const editor = el("resultsEditor");
+  editor.innerHTML = "<p style='color:var(--muted)'>Loading teams…</p>";
+  try {
+    await loadAdminMatches();
+    const select = el("resultsMatch");
+    const previous = select.value;
+    select.innerHTML = adminMatches.map((match) =>
+      `<option value="${escapeHtml(match.id)}">${escapeHtml(match.name)} (${match.id})</option>`
+    ).join("");
+    if (adminMatches.some((match) => match.id === previous)) select.value = previous;
+    renderResultsRows();
+  } catch (err) {
+    editor.innerHTML = `<p style='color:var(--danger)'>${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderResultsRows() {
+  const match = adminMatches.find((entry) => entry.id === el("resultsMatch").value);
+  const editor = el("resultsEditor");
+  if (!match) return (editor.innerHTML = "<p style='color:var(--muted)'>Create a match first.</p>");
+  const teams = match.registrations;
+  if (!teams.length) return (editor.innerHTML = "<p style='color:var(--muted)'>No booked slots for this match yet.</p>");
+  editor.innerHTML = `<table class="results-editor"><thead><tr><th>Team</th>${RESULT_MAPS.map((map) => `<th>${map}<br/><small>Place / Kills</small></th>`).join("")}</tr></thead><tbody>${teams.map((team) =>
+    `<tr><td><strong>#${String(team.slot_number).padStart(2, "0")}</strong> ${escapeHtml(team.team_name)}</td>${RESULT_MAPS.map((map) =>
+      `<td><span class="results-editor__inputs">${resultInput(team.slot_number, map, "placement", match.totalSlots)}${resultInput(team.slot_number, map, "kills", 100)}</span></td>`
+    ).join("")}</tr>`
+  ).join("")}</tbody></table>`;
+  updateResultsPreview();
+}
+
+const RESULT_POINTS = { 1: 10, 2: 6, 3: 5, 4: 4, 5: 3, 6: 2, 7: 1, 8: 1 };
+
+function updateResultsPreview() {
+  const match = adminMatches.find((entry) => entry.id === el("resultsMatch").value);
+  if (!match) return;
+  const totals = new Map();
+  for (const team of match.registrations) {
+    totals.set(Number(team.slot_number), { slot: Number(team.slot_number), team: team.team_name, points: 0, kills: 0, wwcd: 0, bestPlacement: 99 });
+  }
+  for (const input of el("resultsEditor").querySelectorAll("[data-result-slot]")) {
+    const row = totals.get(Number(input.dataset.resultSlot));
+    const value = Number(input.value);
+    if (!row || !Number.isFinite(value)) continue;
+    if (input.dataset.resultField === "kills") {
+      row.kills += value;
+      row.points += value;
+    } else {
+      row.points += RESULT_POINTS[value] || 0;
+      row.wwcd += value === 1 ? 1 : 0;
+      row.bestPlacement = Math.min(row.bestPlacement, value || 99);
+    }
+  }
+  const ranked = [...totals.values()].sort((a, b) => b.points - a.points || b.wwcd - a.wwcd || b.kills - a.kills || a.bestPlacement - b.bestPlacement);
+  el("resultsPreview").innerHTML = ranked.map((row, index) =>
+    `<span><strong>${index + 1}.</strong> #${String(row.slot).padStart(2, "0")} ${escapeHtml(row.team)} <b>${row.points}</b></span>`
+  ).join("");
+}
+
+el("resultsEditor").addEventListener("input", updateResultsPreview);
+
+el("resultsMatch").addEventListener("change", () => {
+  setResultsAlert("");
+  renderResultsRows();
+});
+
+el("publishResultsBtn").addEventListener("click", async () => {
+  const match = adminMatches.find((entry) => entry.id === el("resultsMatch").value);
+  if (!match) return setResultsAlert("Choose a match first.");
+  const rowsBySlot = new Map();
+  for (const input of el("resultsEditor").querySelectorAll("[data-result-slot]")) {
+    const slot = Number(input.dataset.resultSlot);
+    const row = rowsBySlot.get(slot) || { slot, maps: {} };
+    const map = input.dataset.resultMap;
+    row.maps[map] = row.maps[map] || {};
+    row.maps[map][input.dataset.resultField] = input.value;
+    rowsBySlot.set(slot, row);
+  }
+  const rows = [...rowsBySlot.values()];
+  if (!rows.length || rows.some((row) => RESULT_MAPS.some((map) => !row.maps[map]?.placement || row.maps[map]?.kills === ""))) {
+    return setResultsAlert("Enter placement and kills for every approved team across all 3 maps.");
+  }
+  const button = el("publishResultsBtn");
+  button.disabled = true;
+  button.textContent = "Publishing…";
+  setResultsAlert("");
+  try {
+    await API.publishResults(match.id, rows, adminKey);
+    leaderboardRequestId = match.id;
+    await renderLeaderboard();
+    setResultsAlert("✅ Top 8 published on the public dashboard.");
+  } catch (err) {
+    setResultsAlert(err.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Publish Top 8";
+  }
+});
 
 el("regSearch").addEventListener("input", renderRegistrationList);
 el("refreshRegistrationsBtn").addEventListener("click", async () => {
@@ -1442,6 +1813,7 @@ el("regList").addEventListener("click", async (e) => {
   const label = `${matchId} · #${String(slot).padStart(2, "0")}`;
 
   const confirms = {
+      approve: `Approve registration for slot ${label}? The community link will unlock for this team.`,
     move: "Move this team to the selected destination slot?",
     verify: `Mark the payment for slot ${label} as verified?`,
     reject: `Reject the UTR for slot ${label}? The team will get another chance to pay.`,
@@ -1468,6 +1840,7 @@ el("regList").addEventListener("click", async (e) => {
   btn.disabled = true;
   try {
     if (act === "verify") await API.verifyPayment(matchId, slot, adminKey);
+    else if (act === "approve") await API.approveRegistration(matchId, slot, adminKey);
     else if (act === "reject") await API.rejectPayment(matchId, slot, adminKey);
     else await API.cancelRegistration(matchId, slot, adminKey);
     await renderRegistrations();
@@ -1574,6 +1947,7 @@ function prefillDetailsForm() {
   detailsForm.rules.value = Array.isArray(tournament.rules)
     ? tournament.rules.join("\n")
     : "";
+  detailsForm.announcement.value = tournament.announcement || "";
 }
 
 detailsForm.addEventListener("submit", async (e) => {
@@ -1589,6 +1963,7 @@ detailsForm.addEventListener("submit", async (e) => {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+  payload.announcement = detailsForm.announcement.value.trim();
 
   const saveBtn = el("detailsSaveBtn");
   saveBtn.disabled = true;
@@ -1648,10 +2023,14 @@ el("year").textContent = new Date().getFullYear();
 // Matches first, then details: applyPayment inside loadDetails needs the match list
 // to know whether any match charges a fee at all.
 (async () => {
+  renderAuthUI();
+  initGoogleSignIn();
   await renderSlots();
   await loadDetails();
+  await renderDashboard();
 })();
 setInterval(renderSlots, 10000); // keep the counters and boards fresh
 // Slower than the slot poll: this also re-checks the team's payment status, and an
 // admin verifying a payment isn't something that needs second-by-second freshness.
 setInterval(loadDetails, 30000);
+setInterval(renderDashboard, 15000);

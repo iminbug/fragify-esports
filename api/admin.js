@@ -177,7 +177,7 @@ export default async function handler(req, res) {
     }
 
     // Everything below acts on one team.
-    if (action === "verify" || action === "reject" || action === "cancel") {
+    if (action === "verify" || action === "approve" || action === "reject" || action === "cancel") {
       const slot = Number(rawSlot);
       if (!Number.isInteger(slot)) {
         return res.status(400).json({ error: "A slot number is required" });
@@ -198,6 +198,15 @@ export default async function handler(req, res) {
           payment_status: "verified",
           payment_deadline: null,
           verified_at: new Date().toISOString(),
+        });
+      } else if (action === "approve") {
+        if ((registration.payment_status || "verified") !== "verified") {
+          return res.status(409).json({ error: "Verify the payment before approving this team" });
+        }
+        await writeRegistration(match.id, slot, {
+          ...registration,
+          approval_status: "approved",
+          approved_at: new Date().toISOString(),
         });
       } else {
         // Rejecting hands the slot back to the team rather than deleting it — the

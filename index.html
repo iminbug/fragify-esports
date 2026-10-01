@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <!-- Icon sprite -->
@@ -52,9 +53,21 @@
       <span class="dot"></span>
       <span id="navStatusText">Registration Live</span>
     </div>
+    <div class="auth" id="authArea">
+      <div id="googleSignInBtn" class="auth__btn"></div>
+      <div class="auth__signed-in" id="authSignedIn" hidden>
+        <img class="auth__avatar" id="authUserAvatar" alt="" referrerpolicy="no-referrer" hidden />
+        <span class="auth__name" id="authUserName"></span>
+        <button type="button" class="auth__signout" id="authSignOutBtn">Sign out</button>
+      </div>
+    </div>
   </header>
 
   <main>
+    <section class="announcement" id="announcementBar" hidden>
+      <span class="announcement__label">LIVE UPDATE</span>
+      <p id="announcementText"></p>
+    </section>
     <!-- HERO -->
     <section class="hero">
       <p class="hero__eyebrow">// SEASON 01 ·  SQUAD SHOWDOWN</p>
@@ -89,6 +102,19 @@
       </div>
     </section>
 
+    <!-- MY TEAMS — the centralized home for everything a signed-in captain owns, across
+         every match: status, entry-fee state, and the WhatsApp invite the moment it
+         unlocks. No more hunting for a DM from an admin. -->
+    <section class="dashboard" id="dashboardSection" hidden>
+      <div class="section__head">
+        <p class="section__eyebrow">Signed in with Google</p>
+        <h2>🗂️ My Teams</h2>
+        <p>Every team you've registered, in one place — including your community invite as soon as it unlocks.</p>
+      </div>
+      <div class="dash-cards" id="dashboardCards"></div>
+      <p class="dash-empty" id="dashboardEmpty" hidden>You haven't registered a team yet — do that below and it'll show up here.</p>
+    </section>
+
     <!-- INFO CARDS -->
     <section class="cards">
       <div class="card">
@@ -109,6 +135,30 @@
     </section>
 
     <!-- ROOM CREDENTIALS (admin-posted, unlocked with Team ID + password, 10-min life) -->
+    <section class="leaderboard" id="leaderboardSection" hidden>
+      <div class="section__head">
+        <p class="section__eyebrow">Match Results</p>
+        <h2><span class="leaderboard__trophy">🏆</span> Top 8 Leaderboard</h2>
+        <p id="leaderboardMatch"></p>
+      </div>
+      <div class="leaderboard__meta">
+        <span class="leaderboard__live"><i></i> Published Results</span>
+        <span id="leaderboardUpdated"></span>
+      </div>
+      <div class="leaderboard__points" aria-label="Point system">
+        <span class="leaderboard__points-label">Point System</span>
+        <span>Placement: 1st 10 · 2nd 6 · 3rd 5 · 4th 4 · 5th 3 · 6th 2 · 7th-8th 1</span>
+        <span>Kills: +1 each</span>
+      </div>
+      <div class="leaderboard__table-wrap">
+        <table class="leaderboard__table">
+          <thead><tr><th>Rank</th><th>Slot</th><th>Team</th><th>WWCD</th><th>Placement</th><th>Kills</th><th>Total</th></tr></thead>
+          <tbody id="leaderboardRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ROOM CREDENTIALS (admin-posted, unlocked with Team ID + password, 10-min life) -->
     <section class="room" id="roomBanner" hidden>
       <div class="room__card">
         <div class="room__head">
@@ -119,8 +169,9 @@
         <!-- Locked view: everyone sees this until they prove they registered -->
         <form class="room__gate" id="roomGate">
           <p class="room__gate-text">
-            🔒 Room details are for registered teams only. Enter the Team ID and
-            password you received when you registered.
+            🔒 Signed in with Google? Your room details appear automatically in
+            <strong>My Teams</strong> above once they're posted — no need to enter anything here.
+            This manual unlock is only for teams an admin added directly.
           </p>
           <div class="room__gate-fields">
             <div class="field">
@@ -152,6 +203,8 @@
             </div>
           </div>
           <p class="room__note">⚡ Take a screenshot — these details disappear on their own when the timer runs out.</p>
+          <button type="button" class="btn btn--primary room__checkin" id="checkInBtn">Check In for Match</button>
+          <p class="room__note" id="checkInStatus" hidden></p>
           <button type="button" class="room__lock" id="roomLockBtn">Lock again</button>
         </div>
       </div>
@@ -169,8 +222,9 @@
         <!-- Locked view: a team's payment status is its own business -->
         <form class="pay__gate" id="payGate">
           <p class="pay__gate-text">
-            Your slot is confirmed only after the entry fee is verified. Enter the
-            Team ID and password you received when you registered.
+            Signed in with Google? Scroll up to <strong>My Teams</strong> — your status
+            updates there automatically. This manual check is only for teams an admin
+            added directly, using the Team ID and password issued at registration.
           </p>
           <div class="pay__gate-fields">
             <div class="field">
@@ -299,7 +353,7 @@
     <section class="register" id="register">
       <div class="register__head">
         <h2>Team Registration</h2>
-        <p>Fill in your squad details. One entry per team.</p>
+        <p>Fill in your squad details. One entry per team. Sign in with Google above first — that's how we know this team is yours.</p>
       </div>
 
       <form id="regForm" class="form" novalidate>
@@ -431,16 +485,12 @@
           <span class="creds__label">Team ID</span>
           <span class="creds__value" id="credId">FRG-M1-000</span>
         </div>
-        <div class="creds__row">
-          <span class="creds__label">Password</span>
-          <span class="creds__value" id="credPass">••••••</span>
-        </div>
       </div>
 
       <a href="#" target="_blank" rel="noopener" class="btn btn--whatsapp" id="waLink" hidden>
         💬 Join WhatsApp Community
       </a>
-      <p class="modal__hint" id="modalHint">Save your Team ID &amp; Password. You'll need them in the community for your room details.</p>
+      <p class="modal__hint" id="modalHint">Your Google account is how you'll find this team again — check the My Teams section any time.</p>
       <p class="modal__pay" id="modalPayNote" hidden></p>
       <button class="modal__close" id="modalClose">Done</button>
     </div>
@@ -486,6 +536,23 @@
             </p>
             <div class="admin-acc__scroll" id="matchList"></div>
             <button class="btn btn--primary admin-acc__cta" id="matchCreateBtn">+ Create New Match</button>
+          </div>
+        </section>
+
+        <section class="admin-acc__item">
+          <button type="button" class="admin-btn admin-acc__head" data-acc="accResults">
+            <span>🏆 Publish 3-Map Results</span><span class="admin-acc__chev" aria-hidden="true">▾</span>
+          </button>
+          <div class="admin-acc__body" id="accResults" hidden>
+            <p class="admin-acc__hint">Points: 10, 6, 5, 4, 3, 2, 1, 1 for placement #1-#8, plus 1 point per kill. Ties use WWCD, kills, then best placement.</p>
+            <div class="field">
+              <label for="resultsMatch">Match</label>
+              <select id="resultsMatch"></select>
+            </div>
+            <div class="admin-acc__scroll" id="resultsEditor"></div>
+            <div class="results-preview" id="resultsPreview" aria-live="polite"></div>
+            <p class="form__alert" id="resultsAlert" role="alert" hidden></p>
+            <button type="button" class="btn btn--primary admin-acc__cta" id="publishResultsBtn">Publish Top 8</button>
           </div>
         </section>
 
@@ -543,6 +610,10 @@
                 <div class="field">
                   <label for="dPrizeKills">🎯 Highest Kills</label>
                   <input type="text" id="dPrizeKills" name="prizeKills" placeholder="₹50" autocomplete="off" />
+                </div>
+                <div class="field field--full">
+                  <label for="dAnnouncement">📢 Live Announcement</label>
+                  <input type="text" id="dAnnouncement" name="announcement" placeholder="Room opens at 8:45 PM. Check in before 9:00 PM." autocomplete="off" />
                 </div>
               </div>
 

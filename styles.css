@@ -177,6 +177,10 @@ body {
   background: var(--whatsapp); box-shadow: 0 8px 30px rgba(37,211,102,0.3);
 }
 .btn--whatsapp:hover { transform: translateY(-2px); }
+.btn--ghost {
+  color: var(--text); background: transparent; border: 1px solid var(--border);
+}
+.btn--ghost:hover { border-color: var(--accent); color: var(--accent-2); }
 /* `.btn` sets display:inline-block, and an author rule beats the browser's own
    [hidden] rule at equal specificity — so a hidden button would still be on screen
    unless this says otherwise. That matters here: the community link is withheld
@@ -961,6 +965,84 @@ body {
   cursor: pointer;
   font: inherit;
 }
+.announcement {
+  max-width: var(--maxw);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px auto -18px;
+  padding: 10px 24px;
+  border-left: 4px solid var(--accent);
+  background: rgba(255, 77, 46, 0.12);
+  color: var(--text);
+}
+.announcement[hidden] { display: none; }
+.announcement__label {
+  flex: 0 0 auto;
+  color: var(--accent-2);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.announcement p { font-weight: 600; }
+.room__checkin { margin: 10px 0 4px; }
+.leaderboard {
+  max-width: var(--maxw);
+  margin: 52px auto 0;
+  padding: 0 24px;
+}
+.leaderboard .section__head { margin-bottom: 6px; }
+.leaderboard .section__head h2 { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.leaderboard__trophy { display: inline-grid; place-items: center; width: 38px; height: 38px; border: 1px solid rgba(255, 194, 71, 0.72); border-radius: 50%; background: rgba(255, 194, 71, 0.11); font-size: 1.2rem; }
+.leaderboard__meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 12px 0; color: var(--muted); font-size: 0.82rem; }
+.leaderboard__live { display: inline-flex; align-items: center; gap: 7px; color: var(--accent-2); font-family: "Orbitron", sans-serif; font-size: 0.62rem; letter-spacing: 0.7px; }
+.leaderboard__live i { width: 7px; height: 7px; border-radius: 50%; background: var(--whatsapp); box-shadow: 0 0 10px var(--whatsapp); }
+.leaderboard__points {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 16px 0 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: rgba(255, 77, 46, 0.08);
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+.leaderboard__points-label { color: var(--accent-2); font-family: "Orbitron", sans-serif; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.7px; }
+.leaderboard__table-wrap { overflow-x: auto; border: 1px solid rgba(255, 194, 71, 0.42); border-radius: 8px; background: linear-gradient(145deg, rgba(255, 77, 46, 0.18), transparent 38%), var(--card); box-shadow: 10px 10px 0 rgba(255, 77, 46, 0.1), inset 0 1px 0 rgba(255,255,255,.08); }
+.leaderboard__table, .results-editor { width: 100%; border-collapse: collapse; }
+.leaderboard__table { min-width: 700px; }
+.leaderboard__table th, .leaderboard__table td, .results-editor th, .results-editor td { padding: 13px 14px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; }
+.leaderboard__table th { color: #111; background: linear-gradient(90deg, var(--accent-2), #ffe18b); font-family: "Orbitron", sans-serif; font-size: 0.66rem; letter-spacing: 0.7px; }
+.leaderboard__table th:nth-child(n+4), .leaderboard__table td:nth-child(n+4) { text-align: center; }
+.results-editor th { color: var(--accent-2); font-family: "Orbitron", sans-serif; font-size: 0.7rem; letter-spacing: 0.6px; }
+.leaderboard__table tbody tr { transition: background .15s ease, transform .15s ease; }
+.leaderboard__table tbody tr:hover { background: rgba(255, 194, 71, 0.1); transform: translateX(3px); }
+.leaderboard__table tbody tr:last-child td { border-bottom: 0; }
+.leaderboard__rank { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 50%; font-family: "Orbitron", sans-serif; font-size: 0.78rem; font-weight: 800; }
+.leaderboard__rank-1 { background: linear-gradient(90deg, rgba(255, 194, 71, 0.28), transparent 72%); }
+.leaderboard__rank-2 { background: linear-gradient(90deg, rgba(215, 225, 231, 0.14), transparent); }
+.leaderboard__rank-3 { background: linear-gradient(90deg, rgba(214, 123, 61, 0.16), transparent); }
+.leaderboard__rank-1 .leaderboard__rank { border-color: #ffd700; color: #ffd700; }
+.leaderboard__rank-2 .leaderboard__rank { border-color: #d7e1e7; color: #d7e1e7; }
+.leaderboard__rank-3 .leaderboard__rank { border-color: #d67b3d; color: #d67b3d; }
+.leaderboard__team { font-weight: 800; letter-spacing: 0.2px; }
+.leaderboard__total { display: inline-block; min-width: 43px; padding: 4px 8px; border-radius: 3px; background: linear-gradient(105deg, var(--accent), #ff7b3a); color: #160b07; text-align: center; box-shadow: 2px 2px 0 rgba(255, 194, 71, .32); }
+.results-editor { min-width: 720px; }
+.results-editor small { color: var(--muted); font-family: "Rajdhani", sans-serif; font-size: 0.8rem; }
+.results-editor__inputs { display: flex; gap: 5px; }
+.results-editor input { width: 58px; padding: 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-soft); color: var(--text); font: inherit; }
+.results-preview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 12px 0; }
+.results-preview span { padding: 7px 9px; border-left: 3px solid var(--accent); background: var(--bg-soft); font-size: 0.9rem; }
+.results-preview b { float: right; color: var(--accent-2); }
+@media (max-width: 520px) {
+  .announcement { align-items: flex-start; flex-direction: column; gap: 4px; margin: 10px 20px -12px; padding: 10px 14px; }
+  .leaderboard { padding: 0 16px; }
+  .leaderboard__meta { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .results-preview { grid-template-columns: 1fr; }
+}
 .admin-reg-tools {
   display: flex;
   gap: 8px;
@@ -995,4 +1077,71 @@ body {
 .admin-reg-summary .is-warn strong { color: var(--accent-2); }
 @media (max-width: 520px) {
   .admin-reg-tools { flex-direction: column; }
+}
+
+/* ---------- Google auth (nav) ---------- */
+.auth {
+  display: flex; align-items: center; gap: 10px;
+}
+.auth__btn { line-height: 0; }
+/* The GIS button renders its own iframe — keep its wrapper from collapsing to 0
+   height before the script finishes loading. */
+.auth__btn:empty { min-width: 180px; min-height: 40px; }
+.auth__signed-in {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 6px 8px 6px 6px; background: rgba(255,255,255,0.02);
+}
+.auth__avatar {
+  width: 30px; height: 30px; border-radius: 50%; object-fit: cover;
+  border: 1px solid var(--border);
+}
+.auth__name {
+  font-size: 0.86rem; font-weight: 600; color: var(--text);
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.auth__signout {
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 0.78rem;
+  cursor: pointer; transition: border-color .15s ease, color .15s ease;
+}
+.auth__signout:hover { border-color: var(--accent); color: var(--accent-2); }
+@media (max-width: 760px) {
+  .nav { flex-wrap: wrap; row-gap: 10px; }
+  .auth__name { max-width: 90px; }
+}
+
+/* ---------- My Teams dashboard ---------- */
+/* Centralizes everything a captain owns across every match — this is what removes
+   the need for an admin to remember and manually forward the community link. */
+.dashboard {
+  max-width: var(--maxw); margin: 40px auto 0; padding: 0 24px;
+}
+.dash-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px; margin-top: 18px;
+}
+.dash-card {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--card); padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.dash-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.dash-card__team { font-weight: 800; font-size: 1.02rem; }
+.dash-card__match { color: var(--muted); font-size: 0.82rem; margin-top: 2px; }
+.dash-card__id { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.4px; }
+.dash-card__status {
+  flex: 0 0 auto; padding: 4px 10px; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 700; white-space: nowrap;
+  border: 1px solid var(--border);
+}
+.dash-card__status--ok { color: var(--whatsapp); border-color: var(--whatsapp); }
+.dash-card__status--pending { color: var(--accent-2); border-color: var(--accent-2); }
+.dash-card__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dash-card__btn { padding: 9px 16px; font-size: 0.86rem; }
+.dash-card__note { color: var(--muted); font-size: 0.84rem; }
+.dash-empty { color: var(--muted); margin-top: 16px; }
+@media (max-width: 520px) {
+  .dashboard { padding: 0 16px; }
+  .dash-cards { grid-template-columns: 1fr; }
 }

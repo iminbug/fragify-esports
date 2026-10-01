@@ -8,7 +8,9 @@ import {
   activeRegistrations,
   nextFreeSlot,
   isRoomLive,
+  addUserRegistration,
 } from "../lib/matches.js";
+import { sessionFromRequest } from "../lib/session.js";
 
 function genPassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -55,12 +57,13 @@ function cleanMembers(raw) {
 function publicBoard(list) {
   return list
     .map((r) => {
-      // Registrations predating entry fees have no status; they never owed anything.
+      // Older registrations predate admin approval and remain confirmed.
       const status = r.payment_status || "verified";
+      const approved = r.approval_status !== "pending";
       return {
         slot: Number(r.slot_number),
-        name: status === "verified" ? r.team_name : null,
-        confirmed: status === "verified",
+        name: status === "verified" && approved ? r.team_name : null,
+        confirmed: status === "verified" && approved,
       };
     })
     .sort((a, b) => a.slot - b.slot);
@@ -69,7 +72,7 @@ function publicBoard(list) {
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   // Slot counts and the teamboards go stale within seconds; never serve them cached.
   res.setHeader("Cache-Control", "no-store");
 
@@ -106,6 +109,14 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     const { matchId, teamName, leaderName, phone, members: rawMembers } = req.body || {};
+
+    // A team is always captained by a signed-in Google account now — that identity
+    // is what the dashboard and the room/payment/check-in endpoints use to prove
+    // ownership later, instead of a password the captain has to keep safe.
+    const session = sessionFromRequest(req);
+    if (!session) {
+      return res.status(401).json({ error: "Sign in with Google before registering a team" });
+    }
 
     // Server-side validation (frontend validation is not enough)
     if (!teamName || teamName.trim().length < 2) {
@@ -171,8 +182,15 @@ export default async function handler(req, res) {
         members: members,
         team_id: teamId,
         password: password,
+        // Ownership used to rest entirely on the password above; it now rests on
+        // this Google account, which is also how the captain finds this team again
+        // on the dashboard without typing anything.
+        email: session.email,
+        google_name: session.name || null,
+        google_picture: session.picture || null,
         created_at: new Date().toISOString(),
         payment_status: entryFee ? "pending" : "verified",
+        approval_status: "pending",
         payment_deadline: entryFee ? Date.now() + HOLD_MINUTES * 60 * 1000 : null,
         utr: null,
       };
@@ -181,6 +199,7 @@ export default async function handler(req, res) {
       await kv.set(matchKeys.list(match.id), regList);
       await kv.set(matchKeys.phone(match.id, digits), slot);
       await kv.set(matchKeys.slot(match.id, slot), registration);
+      await addUserRegistration(session.email, match.id, slot);
 
       // null when no community link is configured — the UI then tells the team the
       // link is coming rather than rendering a button that goes nowhere.
@@ -188,13 +207,12 @@ export default async function handler(req, res) {
       // A team that still owes the entry fee gets nothing here at all: the invite is
       // the one thing an unpaid squad could take and walk away with, so it is held
       // back until an admin verifies the payment and /api/payment hands it over.
-      const waLink = entryFee ? null : match.whatsappLink;
+      const waLink = null;
 
       return res.status(200).json({
         ok: true,
         slot: slot,
         teamId: teamId,
-        password: password,
         waLink: waLink,
         match: { id: match.id, name: match.name, matchTime: match.matchTime },
         // Present only for a paid match — the UI then sends the team to the
