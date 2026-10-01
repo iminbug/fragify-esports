@@ -995,7 +995,10 @@ function renderDetails() {
 
   // The kill switch: when on, the overlay covers the page and — just in case CSS
   // alone doesn't catch every edge case — the real content is hidden underneath it.
-  const inMaintenance = Boolean(tournament.maintenanceMode);
+  // An admin (?admin=true) always bypasses it — otherwise turning maintenance on
+  // would lock the admin out of the one panel that can turn it back off.
+  const isAdminView = Boolean(new URLSearchParams(window.location.search).get("admin"));
+  const inMaintenance = Boolean(tournament.maintenanceMode) && !isAdminView;
   el("maintenanceOverlay").hidden = !inMaintenance;
   el("maintenanceMessage").textContent =
     tournament.maintenanceMessage || "The site is under maintenance. Please check back shortly.";

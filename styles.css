@@ -1151,8 +1151,12 @@ body {
 }
 
 /* ---------- Maintenance overlay ---------- */
+/* Sits above the public page but below the admin panel (z-index 200) and its modals
+   (z-index 300) — the admin.js query-param check already bypasses this overlay
+   entirely, but a lower z-index here means a stray render order can never lock an
+   admin out of the one screen that turns maintenance back off. */
 .maintenance {
-  position: fixed; inset: 0; z-index: 9999;
+  position: fixed; inset: 0; z-index: 150;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 10px; text-align: center; padding: 24px;
   background: var(--bg);
