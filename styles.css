@@ -1125,6 +1125,10 @@ body {
     display: block; position: fixed; inset: 0; background: rgba(3,3,8,0.6);
     z-index: 390;
   }
+  /* The class rule above beats the browser's own [hidden] at equal specificity —
+     same bug as .btn and .auth__btn — so a closed drawer's backdrop would still
+     sit over the whole page, invisible-ish and blocking every click underneath. */
+  .nav__backdrop[hidden] { display: none; }
 }
 
 /* ---------- Google auth (nav) ---------- */
