@@ -481,13 +481,17 @@
   <section class="dashboard" id="dashboardSection" hidden>
     <div class="dashboard__inner">
       <div class="dashboard__head-row">
-        <div class="section__head">
-          <p class="section__eyebrow">Signed in with Google</p>
-          <h2>🗂️ My Teams</h2>
-          <p>Every team you've registered, in one place — including your community invite as soon as it unlocks.</p>
+        <div class="dashboard__profile">
+          <img class="dashboard__avatar" id="dashProfileAvatar" alt="" referrerpolicy="no-referrer" hidden />
+          <div>
+            <p class="section__eyebrow">Signed in with Google</p>
+            <h2 class="dashboard__profile-name" id="dashProfileName">My Teams</h2>
+            <p class="dashboard__profile-email" id="dashProfileEmail"></p>
+          </div>
         </div>
         <button type="button" class="dashboard__back" id="dashboardBackBtn">← Back to site</button>
       </div>
+      <p class="dashboard__hint">Every team you've registered, in one place — points, community invite and room details all update here automatically.</p>
       <div class="dash-cards" id="dashboardCards"></div>
       <p class="dash-empty" id="dashboardEmpty" hidden>You haven't registered a team yet — do that on the site and it'll show up here.</p>
     </div>

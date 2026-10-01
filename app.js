@@ -105,6 +105,7 @@ const API = {
     apiPost("/api/admin", { action: "move", matchId, slot, toSlot, adminKey }),
   googleSignIn: (idToken) => apiPost("/api/auth", { idToken }),
   dashboard: () => apiGet("/api/dashboard"),
+  renameTeam: (teamId, teamName) => apiPost("/api/dashboard", { teamId, teamName }),
 };
 
 /* ---------- DOM refs ---------- */
@@ -507,19 +508,78 @@ function dashboardStatusLabel(team) {
 
 function dashboardCard(team) {
   const status = dashboardStatusLabel(team);
+  const hasRank = typeof team.rank === "number";
   const card = document.createElement("div");
   card.className = "dash-card";
   card.innerHTML = `
     <div class="dash-card__head">
-      <div>
-        <p class="dash-card__team">${escapeHtml(team.teamName)}</p>
+      <div class="dash-card__identity">
+        <div class="dash-card__name-row" data-name-view>
+          <p class="dash-card__team">${escapeHtml(team.teamName)}</p>
+          <button type="button" class="dash-card__edit" data-edit-name title="Edit team name">✏️</button>
+        </div>
+        <form class="dash-card__name-form" data-name-form hidden>
+          <input type="text" data-name-input value="${escapeHtml(team.teamName)}" maxlength="50" autocomplete="off" />
+          <button type="submit" class="dash-card__name-save">Save</button>
+          <button type="button" class="dash-card__name-cancel" data-cancel-name>Cancel</button>
+        </form>
         <p class="dash-card__match">${escapeHtml(team.matchName)}${team.matchTime ? " · " + escapeHtml(team.matchTime) : ""} · Slot #${String(team.slot).padStart(2, "0")}</p>
       </div>
       <span class="dash-card__status dash-card__status--${status.tone}">${status.text}</span>
     </div>
+    ${hasRank ? `<div class="dash-card__stats">
+      <span class="dash-card__stat dash-card__stat--rank">🏆 Rank #${team.rank}</span>
+      <span class="dash-card__stat">⚡ ${team.points} pts</span>
+    </div>` : ""}
     <p class="dash-card__id">${escapeHtml(team.teamId)}</p>
     <div class="dash-card__actions"></div>
+    <p class="dash-card__error" data-name-error hidden></p>
   `;
+
+  const nameView = card.querySelector("[data-name-view]");
+  const nameForm = card.querySelector("[data-name-form]");
+  const nameInput = card.querySelector("[data-name-input]");
+  const nameError = card.querySelector("[data-name-error]");
+
+  card.querySelector("[data-edit-name]").addEventListener("click", () => {
+    nameError.hidden = true;
+    nameView.hidden = true;
+    nameForm.hidden = false;
+    nameInput.focus();
+    nameInput.select();
+  });
+  card.querySelector("[data-cancel-name]").addEventListener("click", () => {
+    nameInput.value = team.teamName;
+    nameError.hidden = true;
+    nameForm.hidden = true;
+    nameView.hidden = false;
+  });
+  nameForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const value = nameInput.value.trim();
+    nameError.hidden = true;
+    if (value.length < 2) {
+      nameError.textContent = "Team name must be at least 2 characters.";
+      nameError.hidden = false;
+      return;
+    }
+    const saveBtn = nameForm.querySelector(".dash-card__name-save");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    try {
+      const res = await API.renameTeam(team.teamId, value);
+      team.teamName = res.teamName;
+      card.querySelector(".dash-card__team").textContent = res.teamName;
+      nameForm.hidden = true;
+      nameView.hidden = false;
+    } catch (err) {
+      nameError.textContent = err.message;
+      nameError.hidden = false;
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save";
+    }
+  });
 
   const actions = card.querySelector(".dash-card__actions");
 
@@ -569,6 +629,15 @@ async function renderDashboard() {
   // Content only — visibility of the view itself is owned by showDashboardView()/
   // showPublicView() now, so a background refresh never yanks the screen out from
   // under someone who navigated back to the public site.
+  el("dashProfileName").textContent = session.user?.name || "Signed in";
+  el("dashProfileEmail").textContent = session.user?.email || "";
+  const profileAvatar = el("dashProfileAvatar");
+  if (session.user?.picture) {
+    profileAvatar.src = session.user.picture;
+    profileAvatar.hidden = false;
+  } else {
+    profileAvatar.hidden = true;
+  }
 
   const wrap = el("dashboardCards");
   try {
