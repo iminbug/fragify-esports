@@ -11,9 +11,44 @@ const CONFIG = {
   lowSlotThreshold: 4,
 };
 
+/* Must match the Client ID configured as GOOGLE_CLIENT_ID on the server (api/auth.js) —
+   a Google ID token is only ever valid for the one app it was issued to. */
+const GOOGLE_CLIENT_ID = "70511459208-delvaq16hpugufqofilhjp9ktnsgf9ns.apps.googleusercontent.com";
+const GOOGLE_SESSION_KEY = "fragify:google";
+
+function getGoogleSession() {
+  try {
+    const raw = localStorage.getItem(GOOGLE_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setGoogleSession(token, user) {
+  try {
+    localStorage.setItem(GOOGLE_SESSION_KEY, JSON.stringify({ token, user }));
+  } catch {
+    /* localStorage can be unavailable in private tabs — sign-in still works for the
+       current page life, it just won't survive a refresh. */
+  }
+}
+
+function clearGoogleSession() {
+  try { localStorage.removeItem(GOOGLE_SESSION_KEY); } catch { /* nothing to clear */ }
+}
+
 /* ---------- API ---------- */
+/* Every call rides the signed-in captain's session when one exists — this is what
+   lets /api/register, /api/room, /api/payment and /api/checkin recognise "your own
+   team" without a password, and it's what makes /api/dashboard possible at all. */
+function authHeaders() {
+  const session = getGoogleSession();
+  return session?.token ? { Authorization: `Bearer ${session.token}` } : {};
+}
+
 async function apiGet(path) {
-  const res = await fetch(path);
+  const res = await fetch(path, { headers: authHeaders() });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Request failed");
   return json;
@@ -22,7 +57,7 @@ async function apiGet(path) {
 async function apiPost(path, body) {
   const res = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   const json = await res.json();
@@ -68,6 +103,8 @@ const API = {
     apiPost("/api/admin", { action: "add", matchId, ...data, adminKey }),
   moveRegistration: (matchId, slot, toSlot, adminKey) =>
     apiPost("/api/admin", { action: "move", matchId, slot, toSlot, adminKey }),
+  googleSignIn: (idToken) => apiPost("/api/auth", { idToken }),
+  dashboard: () => apiGet("/api/dashboard"),
 };
 
 /* ---------- DOM refs ---------- */
@@ -82,6 +119,7 @@ const closedState = el("closedState");
 const submitBtn = el("submitBtn");
 const heroCta = el("heroCta");
 const modal = el("successModal");
+const dashboardSection = el("dashboardSection");
 
 /* ---------- Match state ---------- */
 /* The public shape of every match, straight from /api/register:
@@ -334,14 +372,16 @@ function savedAuth() {
   try {
     const raw = sessionStorage.getItem(AUTH_KEY);
     const auth = raw ? JSON.parse(raw) : null;
-    return auth && auth.teamId && auth.password ? auth : null;
+    // A Google-registered team has no password — the Authorization header (added by
+    // apiPost) is what proves ownership for them, so only the Team ID is required here.
+    return auth && auth.teamId ? auth : null;
   } catch {
     return null;
   }
 }
 function saveAuth(teamId, password) {
   try {
-    sessionStorage.setItem(AUTH_KEY, JSON.stringify({ teamId, password }));
+    sessionStorage.setItem(AUTH_KEY, JSON.stringify({ teamId, password: password || null }));
   } catch {
     /* private mode — the team just re-enters the details, no harm done */
   }
@@ -349,6 +389,157 @@ function saveAuth(teamId, password) {
 function clearAuth() {
   try { sessionStorage.removeItem(AUTH_KEY); } catch { /* nothing to clear */ }
 }
+
+/* ---------- Google sign-in & centralized dashboard ---------- */
+/* This is the fix for "the community link never reaches the team": once signed in,
+   every team the captain owns \u2014 across every match \u2014 shows up here with its
+   current status, including the WhatsApp invite the moment it unlocks. No admin has
+   to remember to message anyone. */
+
+function renderAuthUI() {
+  const session = getGoogleSession();
+  const signedIn = Boolean(session?.token);
+  el("googleSignInBtn").hidden = signedIn;
+  el("authSignedIn").hidden = !signedIn;
+  if (signedIn) {
+    el("authUserName").textContent = session.user?.name || session.user?.email || "Signed in";
+    const avatar = el("authUserAvatar");
+    if (session.user?.picture) {
+      avatar.src = session.user.picture;
+      avatar.hidden = false;
+    } else {
+      avatar.hidden = true;
+    }
+  }
+  dashboardSection.hidden = !signedIn;
+}
+
+async function handleGoogleCredential(response) {
+  try {
+    const { token, user } = await API.googleSignIn(response.credential);
+    setGoogleSession(token, user);
+    renderAuthUI();
+    await renderDashboard();
+    await applyPayment();
+  } catch (err) {
+    console.error("Google sign-in failed:", err);
+    alert("Could not complete Google sign-in. Please try again.");
+  }
+}
+
+function initGoogleSignIn(attempt = 0) {
+  // The GSI script tag loads with `async defer`, so it can still be mid-flight
+  // when this runs — retry briefly rather than silently never showing the button.
+  if (!window.google?.accounts?.id) {
+    if (attempt > 40) return; // ~6s — the script likely failed to load (blocked, offline)
+    setTimeout(() => initGoogleSignIn(attempt + 1), 150);
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential,
+  });
+  google.accounts.id.renderButton(el("googleSignInBtn"), {
+    theme: "filled_black",
+    size: "large",
+    shape: "pill",
+    text: "signin_with",
+  });
+}
+
+el("authSignOutBtn").addEventListener("click", () => {
+  clearGoogleSession();
+  clearAuth();
+  window.google?.accounts?.id?.disableAutoSelect();
+  renderAuthUI();
+});
+
+function dashboardStatusLabel(team) {
+  if (team.checkedIn) return { text: "Checked In", tone: "ok" };
+  if (!team.approved) return { text: "Awaiting Admin Approval", tone: "pending" };
+  if (team.entryFeePending) return { text: "Entry Fee Pending", tone: "pending" };
+  if (team.paymentStatus === "submitted") return { text: "Payment Under Review", tone: "pending" };
+  return { text: "Confirmed", tone: "ok" };
+}
+
+function dashboardCard(team) {
+  const status = dashboardStatusLabel(team);
+  const card = document.createElement("div");
+  card.className = "dash-card";
+  card.innerHTML = `
+    <div class="dash-card__head">
+      <div>
+        <p class="dash-card__team">${escapeHtml(team.teamName)}</p>
+        <p class="dash-card__match">${escapeHtml(team.matchName)}${team.matchTime ? " · " + escapeHtml(team.matchTime) : ""} · Slot #${String(team.slot).padStart(2, "0")}</p>
+      </div>
+      <span class="dash-card__status dash-card__status--${status.tone}">${status.text}</span>
+    </div>
+    <p class="dash-card__id">${escapeHtml(team.teamId)}</p>
+    <div class="dash-card__actions"></div>
+  `;
+
+  const actions = card.querySelector(".dash-card__actions");
+
+  if (team.waLink) {
+    const link = document.createElement("a");
+    link.href = team.waLink;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.className = "btn btn--whatsapp dash-card__btn";
+    link.textContent = "💬 Open Community Invite";
+    actions.appendChild(link);
+  } else if (!team.approved) {
+    const note = document.createElement("p");
+    note.className = "dash-card__note";
+    note.textContent = "The community invite unlocks once an admin approves this team.";
+    actions.appendChild(note);
+  } else if (team.entryFeePending) {
+    const note = document.createElement("p");
+    note.className = "dash-card__note";
+    note.textContent = "Pay the entry fee below to unlock the community invite.";
+    actions.appendChild(note);
+  }
+
+  if (team.roomLive && !team.checkedIn) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn--ghost dash-card__btn";
+    btn.textContent = "Scroll to Room Details";
+    btn.addEventListener("click", () => el("roomBanner")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    actions.appendChild(btn);
+  }
+
+  return card;
+}
+
+async function renderDashboard() {
+  const session = getGoogleSession();
+  if (!session?.token) {
+    dashboardSection.hidden = true;
+    return;
+  }
+  dashboardSection.hidden = false;
+
+  const wrap = el("dashboardCards");
+  try {
+    const { teams } = await API.dashboard();
+    wrap.textContent = "";
+    if (!teams || teams.length === 0) {
+      el("dashboardEmpty").hidden = false;
+      return;
+    }
+    el("dashboardEmpty").hidden = true;
+    for (const team of teams) wrap.appendChild(dashboardCard(team));
+  } catch (err) {
+    // An expired or invalid session shouldn't nag the team on every poll — sign them
+    // out quietly and let them sign in again when they're ready.
+    if (/sign in|session/i.test(err.message)) {
+      clearGoogleSession();
+      renderAuthUI();
+    }
+  }
+}
+
 
 function setUnlockAlert(msg) {
   const alert = el("unlockAlert");
@@ -896,6 +1087,12 @@ form.addEventListener("submit", async (e) => {
   e.preventDefault();
   setFormAlert("");
 
+  if (!getGoogleSession()?.token) {
+    setFormAlert("Sign in with Google above before registering your team.");
+    el("googleSignInBtn")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+
   const data = {
     matchId: selectedMatchId,
     teamName: form.teamName.value.trim(),
@@ -919,6 +1116,7 @@ form.addEventListener("submit", async (e) => {
     // The team is now logged in, so refresh the entry-fee panel — it should be
     // unlocked and showing their Pay button by the time they close the modal.
     await applyPayment();
+    await renderDashboard();
     submitBtn.disabled = false;
     submitBtn.textContent = "Lock My Slot →";
   }
@@ -947,11 +1145,10 @@ function showSuccess(teamName, res) {
     ? res.match.name + (res.match.matchTime ? " · " + res.match.matchTime : "")
     : "";
   el("credId").textContent = res.teamId;
-  el("credPass").textContent = res.password;
 
-  // The team just proved who they are — remember it so the room card unlocks
-  // itself for them without a second login.
-  saveAuth(res.teamId, res.password);
+  // Ownership now rests on the signed-in Google account, not a password — remember
+  // the Team ID so the room card can find this team's status without asking again.
+  saveAuth(res.teamId, null);
 
   const waBtn = el("waLink");
   const link = normalizeWaLink(res.waLink);
@@ -1826,10 +2023,14 @@ el("year").textContent = new Date().getFullYear();
 // Matches first, then details: applyPayment inside loadDetails needs the match list
 // to know whether any match charges a fee at all.
 (async () => {
+  renderAuthUI();
+  initGoogleSignIn();
   await renderSlots();
   await loadDetails();
+  await renderDashboard();
 })();
 setInterval(renderSlots, 10000); // keep the counters and boards fresh
 // Slower than the slot poll: this also re-checks the team's payment status, and an
 // admin verifying a payment isn't something that needs second-by-second freshness.
 setInterval(loadDetails, 30000);
+setInterval(renderDashboard, 15000);

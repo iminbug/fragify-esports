@@ -1,4 +1,4 @@
-import { authenticateTeam } from "../lib/team-auth.js";
+import { resolveTeam } from "../lib/team-auth.js";
 import { getMatch, writeRegistration } from "../lib/matches.js";
 import { notifyUtrSubmitted } from "../lib/notify.js";
 
@@ -15,7 +15,7 @@ const MAX_RECEIPT_LENGTH = 700000;
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Cache-Control", "no-store");
 
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -23,10 +23,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { teamId, password, utr, receipt } = req.body || {};
+  const { utr, receipt } = req.body || {};
 
   try {
-    const auth = await authenticateTeam(teamId, password);
+    const auth = await resolveTeam(req);
     if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
     let registration = auth.registration;

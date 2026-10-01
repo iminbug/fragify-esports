@@ -1,18 +1,17 @@
-import { authenticateTeam } from "../lib/team-auth.js";
+import { resolveTeam } from "../lib/team-auth.js";
 import { getMatch, writeRegistration } from "../lib/matches.js";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Cache-Control", "no-store");
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { teamId, password } = req.body || {};
   try {
-    const auth = await authenticateTeam(teamId, password);
+    const auth = await resolveTeam(req);
     if (auth.error) return res.status(auth.status).json({ error: auth.error });
     const registration = auth.registration;
     if ((registration.payment_status || "verified") !== "verified") {
