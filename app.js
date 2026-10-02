@@ -154,11 +154,22 @@ function renderBoards() {
     const block = document.createElement("div");
     block.className = "board__match";
 
+    const titleRow = document.createElement("div");
+    titleRow.className = "board__match-head";
+
     const title = document.createElement("h3");
     title.className = "board__match-title";
     // textContent, not innerHTML — the match name is admin input, but no reason
     // to make it the one string on the page that could carry markup.
     title.textContent = m.name + (m.matchTime ? " · " + m.matchTime : "");
+
+    const downloadBtn = document.createElement("button");
+    downloadBtn.type = "button";
+    downloadBtn.className = "board__download";
+    downloadBtn.textContent = "📥 Download Image";
+    downloadBtn.addEventListener("click", () => downloadBoardImage(m, teams));
+
+    titleRow.append(title, downloadBtn);
 
     const grid = document.createElement("div");
     grid.className = "board__grid";
@@ -192,13 +203,102 @@ function renderBoards() {
       grid.append(card);
     }
 
-    block.append(title, grid);
+    block.append(titleRow, grid);
     wrap.append(block);
   }
 
   el("boardSub").textContent = confirmedTotal
     ? `${confirmedTotal} team${confirmedTotal === 1 ? "" : "s"} confirmed. A team's name appears here as soon as its entry fee is verified.`
     : "No teams confirmed yet. A team's name appears here as soon as its entry fee is verified.";
+}
+
+/* ---------- Teamboard image export ---------- */
+/* Drawn by hand on a <canvas> rather than pulled in from a screenshot library —
+   there's no npm registry access in this project's build environment, and this
+   needs nothing fancier than rectangles and text anyway. Exists because a slot
+   list pasted into WhatsApp as text reformats itself into a mess; an image never does. */
+async function downloadBoardImage(match, teams) {
+  const bySlot = new Map(teams.map((t) => [Number(t.slot), t]));
+  const rowHeight = 46;
+  const headerHeight = 112;
+  const footerHeight = 40;
+  const width = 720;
+  const height = headerHeight + match.totalSlots * rowHeight + footerHeight;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  // The page's own webfonts are already loaded by this point in a real visit;
+  // waiting here just covers the rare case a slow connection hasn't finished yet.
+  if (document.fonts?.ready) {
+    try { await document.fonts.ready; } catch { /* draw with fallback fonts */ }
+  }
+
+  ctx.fillStyle = "#0b0c08";
+  ctx.fillRect(0, 0, width, height);
+
+  const grad = ctx.createLinearGradient(0, 0, width, 0);
+  grad.addColorStop(0, "#ff9b21");
+  grad.addColorStop(1, "#ffd54a");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, width, 5);
+
+  ctx.fillStyle = "#f0ead8";
+  ctx.font = "800 26px Orbitron, sans-serif";
+  ctx.fillText("FRAGIFY ESPORTS", 26, 46);
+
+  ctx.fillStyle = "#ffd54a";
+  ctx.font = "700 19px Rajdhani, sans-serif";
+  ctx.fillText(match.name + (match.matchTime ? " · " + match.matchTime : ""), 26, 74);
+
+  const confirmedCount = teams.filter((t) => t.confirmed).length;
+  ctx.fillStyle = "#a8a48c";
+  ctx.font = "500 14px Rajdhani, sans-serif";
+  ctx.fillText(`${confirmedCount} / ${match.totalSlots} slots confirmed`, 26, 96);
+
+  for (let i = 0; i < match.totalSlots; i++) {
+    const slot = match.firstSlot + i;
+    const team = bySlot.get(slot);
+    const rowY = headerHeight + i * rowHeight;
+
+    ctx.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.035)" : "rgba(255,255,255,0.01)";
+    ctx.fillRect(0, rowY, width, rowHeight);
+
+    ctx.fillStyle = team?.confirmed ? "#ff9b21" : "#33351f";
+    ctx.beginPath();
+    ctx.arc(52, rowY + rowHeight / 2, 17, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = team?.confirmed ? "#14150f" : "#a8a48c";
+    ctx.font = "700 13px Rajdhani, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("#" + String(slot).padStart(2, "0"), 52, rowY + rowHeight / 2 + 5);
+    ctx.textAlign = "left";
+
+    ctx.fillStyle = team?.confirmed ? "#f0ead8" : "#6b6b5a";
+    ctx.font = team?.confirmed ? "700 18px Rajdhani, sans-serif" : "500 15px Rajdhani, sans-serif";
+    const label = team?.confirmed ? team.name : team ? "Payment pending…" : "Open";
+    ctx.fillText(label, 86, rowY + rowHeight / 2 + 6);
+  }
+
+  ctx.fillStyle = "#a8a48c";
+  ctx.font = "500 12px Rajdhani, sans-serif";
+  ctx.fillText(
+    `Generated ${new Date().toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`,
+    26,
+    height - 16
+  );
+
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `fragify-${match.id}-slots.png`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, "image/png");
 }
 
 /* ---------- Match picker on the form ---------- */
@@ -1206,15 +1306,6 @@ form.addEventListener("submit", async (e) => {
   e.preventDefault();
   setFormAlert("");
 
-  if (!getGoogleSession()?.token) {
-    setFormAlert("Sign in with Google first — tap the menu button and use Sign in with Google.");
-    // On mobile the button lives inside the closed drawer, off-screen — opening it
-    // is what actually brings it into view, not a scroll.
-    setDrawerOpen(true);
-    el("googleSignInBtn")?.scrollIntoView({ behavior: "smooth", block: "center" });
-    return;
-  }
-
   const data = {
     matchId: selectedMatchId,
     teamName: form.teamName.value.trim(),
@@ -1268,25 +1359,33 @@ function showSuccess(teamName, res) {
     : "";
   el("credId").textContent = res.teamId;
 
-  // Ownership now rests on the signed-in Google account, not a password — remember
-  // the Team ID so the room card can find this team's status without asking again.
-  saveAuth(res.teamId, null);
+  // A signed-in captain finds this team again through My Teams, no password
+  // needed — everyone else gets one back here and it's the only way in later.
+  const credPassRow = el("credPassRow");
+  if (res.password) {
+    el("credPass").textContent = res.password;
+    credPassRow.hidden = false;
+  } else {
+    credPassRow.hidden = true;
+  }
+  saveAuth(res.teamId, res.password || null);
 
   const waBtn = el("waLink");
   const link = normalizeWaLink(res.waLink);
   if (link) {
     waBtn.href = link;
     waBtn.hidden = false;
-    el("modalHint").textContent =
-      "Save your Team ID & Password. You'll need them in the community for your room details.";
+    el("modalHint").textContent = res.password
+      ? "Save your Team ID & Password — you'll need them to check your status and room details later."
+      : "Your Google account is how you'll find this team again — check the My Teams screen any time.";
   } else {
     // Either no community link is configured yet, or the entry fee is still unpaid
     // and the server is holding the link back. A dead button is worse than none.
     waBtn.removeAttribute("href");
     waBtn.hidden = true;
-    el("modalHint").textContent = res.paymentDue
-      ? "Save your Team ID & Password — screenshot this. After payment verification, an admin must approve your registration before the community link unlocks."
-      : "Save your Team ID & Password — screenshot this. Your slot is reserved and awaits admin approval; the community link unlocks after approval.";
+    el("modalHint").textContent = res.password
+      ? "Save your Team ID & Password — screenshot this. The community link unlocks after payment verification and admin approval."
+      : "Check the My Teams screen for updates — the community link unlocks after payment verification and admin approval.";
   }
 
   const payNote = el("modalPayNote");

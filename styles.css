@@ -783,13 +783,26 @@ body {
 /* One roster block per match on the public teamboard. */
 .board__match { margin-bottom: 30px; }
 .board__match:last-child { margin-bottom: 0; }
+.board__match-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .board__match-title {
   font-family: "Orbitron", sans-serif; font-size: 0.95rem; letter-spacing: 0.5px;
-  color: var(--accent-2); margin-bottom: 12px;
+  color: var(--accent-2); margin-bottom: 0;
   display: flex; align-items: center; gap: 10px;
+  flex: 1; min-width: 0;
 }
 .board__match-title::after {
   content: ""; flex: 1; height: 1px; background: var(--border);
+}
+.board__download {
+  flex: 0 0 auto; border: 1px solid var(--border); background: var(--bg-soft);
+  color: var(--muted); border-radius: 999px; padding: 7px 14px;
+  font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.board__download:hover { border-color: var(--accent); color: var(--accent-2); }
+@media (max-width: 520px) {
+  .board__match-head { flex-wrap: wrap; }
+  .board__download { order: 1; }
 }
 
 /* The match picker on the registration form: one selectable card per open match. */
@@ -1114,13 +1127,19 @@ body {
   .nav__drawer {
     position: fixed; top: 0; right: 0; height: 100vh; width: min(80vw, 320px);
     background: var(--card); border-left: 1px solid var(--border);
+    border-top-left-radius: 20px; border-bottom-left-radius: 20px;
+    box-shadow: -14px 0 40px rgba(0,0,0,0.4);
     flex-direction: column; align-items: stretch; justify-content: flex-start;
     gap: 26px; padding: 90px 22px 24px;
     transform: translateX(100%); transition: transform .25s ease;
     z-index: 400; overflow-y: auto;
   }
   .nav__drawer.is-open { transform: translateX(0); }
-  .nav__drawer-links { flex-direction: column; align-items: flex-start; gap: 18px; }
+  .nav__drawer-links { flex-direction: column; align-items: stretch; gap: 6px; }
+  .nav__link {
+    padding: 12px 14px; border-radius: 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .nav__link:hover, .nav__link:active { background: rgba(255,155,33,0.1); color: var(--accent-2); }
   .nav__backdrop {
     display: block; position: fixed; inset: 0; background: rgba(3,3,8,0.6);
     z-index: 390;

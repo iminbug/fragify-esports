@@ -110,18 +110,10 @@ export default async function handler(req, res) {
   if (req.method === "POST") {
     const { matchId, teamName, leaderName, phone, members: rawMembers } = req.body || {};
 
-    // A team is always captained by a signed-in Google account now — that identity
-    // is what the dashboard and the room/payment/check-in endpoints use to prove
-    // ownership later, instead of a password the captain has to keep safe.
+    // Google sign-in is optional: signed-in captains get the My Teams dashboard
+    // for free, but a team can still register and manage itself the classic way,
+    // with the Team ID + password handed back below.
     const session = sessionFromRequest(req);
-    if (!session) {
-      return res.status(401).json({ error: "Sign in with Google before registering a team" });
-    }
-
-    // A team is always captained by a signed-in Google account now — that identity
-    // is what the dashboard and the room/payment/check-in endpoints use to prove
-    // ownership later, instead of a password the captain has to keep safe.
-
 
     // Server-side validation (frontend validation is not enough)
     if (!teamName || teamName.trim().length < 2) {
@@ -187,12 +179,12 @@ export default async function handler(req, res) {
         members: members,
         team_id: teamId,
         password: password,
-        // Ownership used to rest entirely on the password above; it now rests on
-        // this Google account, which is also how the captain finds this team again
-        // on the dashboard without typing anything.
-        email: session.email,
-        google_name: session.name || null,
-        google_picture: session.picture || null,
+        // Set only when the captain was signed in — that's how the My Teams
+        // dashboard finds this team later. Without it, the Team ID + password
+        // above is the only way back in, same as before Google sign-in existed.
+        email: session?.email || null,
+        google_name: session?.name || null,
+        google_picture: session?.picture || null,
         created_at: new Date().toISOString(),
         payment_status: entryFee ? "pending" : "verified",
         approval_status: "pending",
@@ -204,7 +196,7 @@ export default async function handler(req, res) {
       await kv.set(matchKeys.list(match.id), regList);
       await kv.set(matchKeys.phone(match.id, digits), slot);
       await kv.set(matchKeys.slot(match.id, slot), registration);
-      await addUserRegistration(session.email, match.id, slot);
+      if (session?.email) await addUserRegistration(session.email, match.id, slot);
 
       // null when no community link is configured — the UI then tells the team the
       // link is coming rather than rendering a button that goes nowhere.
@@ -218,6 +210,9 @@ export default async function handler(req, res) {
         ok: true,
         slot: slot,
         teamId: teamId,
+        // Only a signed-in captain can skip writing this down — everyone else
+        // needs it to ever find this team again.
+        password: session?.email ? null : password,
         waLink: waLink,
         match: { id: match.id, name: match.name, matchTime: match.matchTime },
         // Present only for a paid match — the UI then sends the team to the

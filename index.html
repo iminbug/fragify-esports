@@ -56,10 +56,10 @@
 
     <nav class="nav__drawer" id="navDrawer" aria-label="Site navigation">
       <div class="nav__drawer-links">
-        <a href="#register" class="nav__link" data-nav-close>Register</a>
-        <a href="#detailsSection" class="nav__link" data-nav-close>Details</a>
-        <a href="#leaderboardSection" class="nav__link" data-nav-close>Leaderboard</a>
-        <a href="#connect" class="nav__link" data-nav-close>Connect</a>
+        <a href="#register" class="nav__link" data-nav-close>📝 Register</a>
+        <a href="#detailsSection" class="nav__link" data-nav-close>📋 Details</a>
+        <a href="#leaderboardSection" class="nav__link" data-nav-close>🏆 Leaderboard</a>
+        <a href="#connect" class="nav__link" data-nav-close>📣 Connect</a>
         <button type="button" class="nav__link nav__link--accent" id="navMyTeamsBtn" hidden>🗂️ My Teams</button>
       </div>
       <div class="nav__status" id="navStatus">
@@ -171,9 +171,9 @@
         <!-- Locked view: everyone sees this until they prove they registered -->
         <form class="room__gate" id="roomGate">
           <p class="room__gate-text">
-            🔒 Signed in with Google? Your room details appear automatically in
-            <strong>My Teams</strong> above once they're posted — no need to enter anything here.
-            This manual unlock is only for teams an admin added directly.
+            🔒 Room details are for registered teams only. Signed in with Google?
+            Check <strong>My Teams</strong> above instead — or enter the Team ID and
+            password you received when you registered.
           </p>
           <div class="room__gate-fields">
             <div class="field">
@@ -224,9 +224,9 @@
         <!-- Locked view: a team's payment status is its own business -->
         <form class="pay__gate" id="payGate">
           <p class="pay__gate-text">
-            Signed in with Google? Scroll up to <strong>My Teams</strong> — your status
-            updates there automatically. This manual check is only for teams an admin
-            added directly, using the Team ID and password issued at registration.
+            Signed in with Google? Check <strong>My Teams</strong> instead — your status
+            updates there automatically. Otherwise, enter the Team ID and password
+            you received when you registered.
           </p>
           <div class="pay__gate-fields">
             <div class="field">
@@ -355,7 +355,7 @@
     <section class="register" id="register">
       <div class="register__head">
         <h2>Team Registration</h2>
-        <p>Fill in your squad details. One entry per team. Sign in with Google above first — that's how we know this team is yours.</p>
+        <p>Fill in your squad details. One entry per team. Signing in with Google is optional — it just unlocks the My Teams dashboard.</p>
       </div>
 
       <form id="regForm" class="form" novalidate>
@@ -510,6 +510,10 @@
         <div class="creds__row">
           <span class="creds__label">Team ID</span>
           <span class="creds__value" id="credId">FRG-M1-000</span>
+        </div>
+        <div class="creds__row" id="credPassRow" hidden>
+          <span class="creds__label">Password</span>
+          <span class="creds__value" id="credPass">••••••</span>
         </div>
       </div>
 
