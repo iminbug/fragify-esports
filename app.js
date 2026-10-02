@@ -11,6 +11,159 @@ const CONFIG = {
   lowSlotThreshold: 4,
 };
 
+/* ---------- PWA: installable app shell ---------- */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => console.error("SW registration failed:", err));
+  });
+}
+
+// Chrome/Edge/Android fire this instead of showing their own install UI the moment
+// they decide the site qualifies — holding onto it is what lets our own button
+// trigger the native install dialog on demand instead of never appearing at all.
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById("navInstallBtn");
+  if (btn) btn.hidden = false;
+});
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  const btn = document.getElementById("navInstallBtn");
+  if (btn) btn.hidden = true;
+});
+
+/* ---------- Language toggle (English / Hindi) ---------- */
+/* Covers the main player-facing screens — nav, hero, cards, leaderboard, room,
+   payment, details, teamboard, registration, connect and My Teams. Admin panel and
+   dynamic server/alert messages stay in English for now; translating every status
+   string too was out of scope for one pass. */
+const TRANSLATIONS = {
+  en: {
+    "nav.register": "📝 Register", "nav.details": "📋 Details", "nav.leaderboard": "🏆 Leaderboard",
+    "nav.connect": "📣 Connect", "nav.myTeams": "🗂️ My Teams", "nav.install": "📲 Install App",
+    "auth.signOut": "Sign out",
+    "hero.eyebrow": "// SEASON 01 ·  SQUAD SHOWDOWN",
+    "hero.titleLine1": "REGISTER YOUR SQUAD.", "hero.titleLine2": "CLAIM YOUR SLOT.",
+    "hero.subtitle": `Multiple matches, <strong>limited slots each</strong>. Pick your match time,
+        lock in your squad, get your slot number, and join the WhatsApp community for
+        your room ID &amp; password. <strong>Winner Winner Chicken Dinner</strong> awaits. 🍗`,
+    "hero.ctaRegister": "Register Now →", "hero.ctaCommunity": "💬 Join Community",
+    "cards.limited.title": "Limited Slots",
+    "cards.limited.desc": "Every match has a hard cap. When the last squad registers, that lobby auto-locks. No exceptions.",
+    "cards.instant.title": "Instant Slot",
+    "cards.instant.desc": "Your slot number is assigned the second you register. Shown on screen instantly.",
+    "cards.room.title": "Room ID &amp; Pass",
+    "cards.room.desc": "Get the WhatsApp community invite with your room ID &amp; password after registering.",
+    "leaderboard.eyebrow": "Match Results", "leaderboard.title": "Top 8 Leaderboard",
+    "leaderboard.published": "Published Results", "leaderboard.pointSystem": "Point System",
+    "leaderboard.placementPoints": "Placement: 1st 10 · 2nd 6 · 3rd 5 · 4th 4 · 5th 3 · 6th 2 · 7th-8th 1",
+    "leaderboard.killPoints": "Kills: +1 each", "leaderboard.colRank": "Rank", "leaderboard.colSlot": "Slot",
+    "leaderboard.colTeam": "Team", "leaderboard.colPlacement": "Placement", "leaderboard.colKills": "Kills",
+    "leaderboard.colTotal": "Total",
+    "room.open": "Room is Open", "room.unlockBtn": "Unlock Room Details",
+    "room.screenshotNote": "⚡ Take a screenshot — these details disappear on their own when the timer runs out.",
+    "room.checkInBtn": "Check In for Match", "room.lockAgain": "Lock again",
+    "pay.badge": "💳 Entry Fee", "pay.checkStatusBtn": "Check My Payment Status",
+    "field.teamId": "Team ID", "field.password": "Password", "field.roomId": "Room ID",
+    "details.title": "Match Details", "details.subtitle": "Everything you need to know before the drop.",
+    "details.prizeTitle": "🏆 Prize Breakdown", "details.rulesTitle": "⚠️ Mandatory Rules",
+    "board.title": "Confirmed Teams",
+    "register.title": "Team Registration",
+    "register.subtitle": "Fill in your squad details. One entry per team. Signing in with Google is optional — it just unlocks the My Teams dashboard.",
+    "register.chooseMatch": `Choose Your Match <span class="req">*</span>`,
+    "register.teamName": `Team Name <span class="req">*</span>`,
+    "register.leaderName": `Team Leader (IGN) <span class="req">*</span>`,
+    "register.phone": `WhatsApp Number <span class="req">*</span>`,
+    "register.squadLegend": `Squad Members <span class="squad__optional">Optional</span>`,
+    "register.squadHint": "The leader is Player 1. Add the rest of your squad now, or share their IGNs in the community later.",
+    "register.submit": "Lock My Slot →",
+    "register.agree": "By registering you agree to the tournament rules &amp; fair-play policy.",
+    "connect.title": "Squad Up With Us",
+    "connect.subtitle": "Live streams, highlights and tournament updates — plus a direct line if you're stuck.",
+    "connect.reportBtn": "🚩 Report a Player",
+    "dashboard.eyebrow": "Signed in with Google", "dashboard.back": "← Back to site",
+    "dashboard.hint": "Every team you've registered, in one place — points, community invite and room details all update here automatically.",
+    "dashboard.empty": "You haven't registered a team yet — do that on the site and it'll show up here.",
+    "modal.badge": "✅ You're In!", "modal.joinCommunity": "💬 Join WhatsApp Community", "modal.done": "Done",
+  },
+  hi: {
+    "nav.register": "📝 रजिस्टर करें", "nav.details": "📋 जानकारी", "nav.leaderboard": "🏆 लीडरबोर्ड",
+    "nav.connect": "📣 संपर्क", "nav.myTeams": "🗂️ मेरी टीमें", "nav.install": "📲 ऐप इंस्टॉल करें",
+    "auth.signOut": "साइन आउट",
+    "hero.eyebrow": "// सीज़न 01 · स्क्वाड शोडाउन",
+    "hero.titleLine1": "अपनी स्क्वाड रजिस्टर करो.", "hero.titleLine2": "अपना स्लॉट पक्का करो.",
+    "hero.subtitle": `कई मैच, <strong>हर एक में सीमित स्लॉट</strong>. अपना मैच टाइम चुनो, स्क्वाड लॉक करो,
+        स्लॉट नंबर पाओ, और रूम आईडी व पासवर्ड के लिए व्हाट्सएप कम्युनिटी जॉइन करो.
+        <strong>विनर विनर चिकन डिनर</strong> का इंतज़ार कर रहा है. 🍗`,
+    "hero.ctaRegister": "अभी रजिस्टर करें →", "hero.ctaCommunity": "💬 कम्युनिटी जॉइन करें",
+    "cards.limited.title": "सीमित स्लॉट",
+    "cards.limited.desc": "हर मैच की एक तय सीमा है. आखिरी स्क्वाड रजिस्टर होते ही लॉबी लॉक हो जाती है. कोई छूट नहीं.",
+    "cards.instant.title": "तुरंत स्लॉट",
+    "cards.instant.desc": "रजिस्टर करते ही स्क्रीन पर आपका स्लॉट नंबर दिख जाता है.",
+    "cards.room.title": "रूम आईडी व पास",
+    "cards.room.desc": "रजिस्टर करने के बाद रूम आईडी व पासवर्ड के लिए व्हाट्सएप कम्युनिटी इनवाइट पाएं.",
+    "leaderboard.eyebrow": "मैच रिजल्ट", "leaderboard.title": "टॉप 8 लीडरबोर्ड",
+    "leaderboard.published": "रिजल्ट प्रकाशित", "leaderboard.pointSystem": "पॉइंट सिस्टम",
+    "leaderboard.placementPoints": "प्लेसमेंट: पहला 10 · दूसरा 6 · तीसरा 5 · चौथा 4 · पांचवां 3 · छठा 2 · 7वां-8वां 1",
+    "leaderboard.killPoints": "किल: +1 हर एक", "leaderboard.colRank": "रैंक", "leaderboard.colSlot": "स्लॉट",
+    "leaderboard.colTeam": "टीम", "leaderboard.colPlacement": "प्लेसमेंट", "leaderboard.colKills": "किल",
+    "leaderboard.colTotal": "कुल",
+    "room.open": "रूम खुला है", "room.unlockBtn": "रूम डिटेल्स अनलॉक करें",
+    "room.screenshotNote": "⚡ स्क्रीनशॉट ले लें — टाइमर खत्म होते ही ये डिटेल्स अपने आप गायब हो जाएंगी.",
+    "room.checkInBtn": "मैच के लिए चेक-इन करें", "room.lockAgain": "फिर से लॉक करें",
+    "pay.badge": "💳 एंट्री फीस", "pay.checkStatusBtn": "मेरा पेमेंट स्टेटस चेक करें",
+    "field.teamId": "टीम आईडी", "field.password": "पासवर्ड", "field.roomId": "रूम आईडी",
+    "details.title": "मैच की जानकारी", "details.subtitle": "ड्रॉप से पहले जो कुछ जानना ज़रूरी है.",
+    "details.prizeTitle": "🏆 इनाम विवरण", "details.rulesTitle": "⚠️ ज़रूरी नियम",
+    "board.title": "कन्फर्म टीमें",
+    "register.title": "टीम रजिस्ट्रेशन",
+    "register.subtitle": "अपनी स्क्वाड की जानकारी भरें. एक टीम, एक एंट्री. Google से साइन इन करना वैकल्पिक है — इससे सिर्फ My Teams डैशबोर्ड अनलॉक होता है.",
+    "register.chooseMatch": `अपना मैच चुनें <span class="req">*</span>`,
+    "register.teamName": `टीम का नाम <span class="req">*</span>`,
+    "register.leaderName": `टीम लीडर (IGN) <span class="req">*</span>`,
+    "register.phone": `व्हाट्सएप नंबर <span class="req">*</span>`,
+    "register.squadLegend": `स्क्वाड मेंबर्स <span class="squad__optional">वैकल्पिक</span>`,
+    "register.squadHint": "लीडर ही प्लेयर 1 है. बाकी स्क्वाड अभी जोड़ें, या बाद में कम्युनिटी में उनके IGN शेयर करें.",
+    "register.submit": "मेरा स्लॉट लॉक करें →",
+    "register.agree": "रजिस्टर करके आप टूर्नामेंट के नियमों व फेयर-प्ले पॉलिसी से सहमत होते हैं.",
+    "connect.title": "हमसे जुड़ें",
+    "connect.subtitle": "लाइव स्ट्रीम, हाइलाइट्स और टूर्नामेंट अपडेट — साथ ही अगर कोई दिक्कत हो तो सीधी लाइन.",
+    "connect.reportBtn": "🚩 प्लेयर रिपोर्ट करें",
+    "dashboard.eyebrow": "Google से साइन इन किया", "dashboard.back": "← साइट पर वापस जाएं",
+    "dashboard.hint": "आपने जो भी टीमें रजिस्टर की हैं, सब यहां एक जगह — पॉइंट्स, कम्युनिटी इनवाइट और रूम डिटेल्स सब अपने आप अपडेट होते हैं.",
+    "dashboard.empty": "अभी तक कोई टीम रजिस्टर नहीं की — साइट पर जाकर करें, यहां दिख जाएगी.",
+    "modal.badge": "✅ आप इन हैं!", "modal.joinCommunity": "💬 व्हाट्सएप कम्युनिटी जॉइन करें", "modal.done": "हो गया",
+  },
+};
+const LANG_KEY = "fragify:lang";
+
+function applyLanguage(lang) {
+  const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  for (const node of document.querySelectorAll("[data-i18n]")) {
+    const value = dict[node.dataset.i18n];
+    if (value !== undefined) node.textContent = value;
+  }
+  for (const node of document.querySelectorAll("[data-i18n-html]")) {
+    const value = dict[node.dataset.i18nHtml];
+    if (value !== undefined) node.innerHTML = value;
+  }
+  document.documentElement.lang = lang === "hi" ? "hi" : "en";
+  const btn = document.getElementById("navLangBtn");
+  if (btn) btn.textContent = lang === "hi" ? "🌐 English" : "🌐 हिंदी";
+  try { localStorage.setItem(LANG_KEY, lang); } catch { /* private tab — just won't persist */ }
+}
+
+function currentLanguage() {
+  try { return localStorage.getItem(LANG_KEY) || "en"; } catch { return "en"; }
+}
+
+applyLanguage(currentLanguage());
+document.getElementById("navLangBtn")?.addEventListener("click", () => {
+  applyLanguage(currentLanguage() === "hi" ? "en" : "hi");
+});
+
 /* Must match the Client ID configured as GOOGLE_CLIENT_ID on the server (api/auth.js) —
    a Google ID token is only ever valid for the one app it was issued to. */
 const GOOGLE_CLIENT_ID = "70511459208-delvaq16hpugufqofilhjp9ktnsgf9ns.apps.googleusercontent.com";
@@ -106,6 +259,10 @@ const API = {
   googleSignIn: (idToken) => apiPost("/api/auth", { idToken }),
   dashboard: () => apiGet("/api/dashboard"),
   renameTeam: (teamId, teamName) => apiPost("/api/dashboard", { teamId, teamName }),
+  reportPlayer: (data) => apiPost("/api/report", data),
+  listReports: (adminKey) => apiPost("/api/report", { action: "list", adminKey }),
+  resolveReport: (id, adminKey) => apiPost("/api/report", { action: "resolve", id, adminKey }),
+  deleteReport: (id, adminKey) => apiPost("/api/report", { action: "delete", id, adminKey }),
 };
 
 /* ---------- DOM refs ---------- */
@@ -452,7 +609,88 @@ async function renderLeaderboard() {
     ? `Updated ${new Date(publishedResults.publishedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
     : "";
   el("leaderboardRows").innerHTML = rows.map((row) => `
-    <tr class="leaderboard__rank-${row.rank}"><td><span class="leaderboard__rank">${row.rank}</span></td><td>#${String(row.slot).padStart(2, "0")}</td><td class="leaderboard__team">${escapeHtml(row.team)}</td><td>${row.chickenDinners}</td><td>${row.placementPoints}</td><td>${row.kills}</td><td><strong class="leaderboard__total">${row.points}</strong></td></tr>`).join("");
+    <tr class="leaderboard__rank-${row.rank}"><td><span class="leaderboard__rank">${row.rank}</span></td><td>#${String(row.slot).padStart(2, "0")}</td><td class="leaderboard__team">${escapeHtml(row.team)}${row.rank <= 3 ? ` <button type="button" class="leaderboard__cert-btn" data-cert-rank="${row.rank}" data-cert-team="${escapeHtml(row.team)}" data-cert-points="${row.points}" title="Download certificate">🏅</button>` : ""}</td><td>${row.chickenDinners}</td><td>${row.placementPoints}</td><td>${row.kills}</td><td><strong class="leaderboard__total">${row.points}</strong></td></tr>`).join("");
+}
+
+el("leaderboardRows").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-cert-rank]");
+  if (!btn || !publishedResults) return;
+  downloadCertificateImage({
+    matchName: publishedResults.matchName,
+    team: btn.dataset.certTeam,
+    rank: Number(btn.dataset.certRank),
+    points: btn.dataset.certPoints,
+  });
+});
+
+/* ---------- Winner certificate image export ---------- */
+/* A canvas-drawn certificate, same reasoning as the teamboard image: no PDF library
+   is reachable from this environment (no npm registry access), and a shareable PNG
+   does the actual job — a team posting proof of their placement — just as well. */
+function downloadCertificateImage({ matchName, team, rank, points }) {
+  const width = 1000;
+  const height = 700;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  const medal = { 1: ["#ffd700", "1st Place"], 2: ["#d7e1e7", "2nd Place"], 3: ["#d67b3d", "3rd Place"] }[rank] || ["#ff9b21", `#${rank}`];
+  const [accent, placeLabel] = medal;
+
+  ctx.fillStyle = "#0b0c08";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 6;
+  ctx.strokeRect(24, 24, width - 48, height - 48);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.strokeRect(38, 38, width - 76, height - 76);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#a8a48c";
+  ctx.font = "700 20px Orbitron, sans-serif";
+  ctx.fillText("FRAGIFY ESPORTS", width / 2, 110);
+
+  ctx.fillStyle = accent;
+  ctx.font = "800 46px Orbitron, sans-serif";
+  ctx.fillText("CERTIFICATE OF ACHIEVEMENT", width / 2, 180);
+
+  ctx.fillStyle = "#f0ead8";
+  ctx.font = "500 20px Rajdhani, sans-serif";
+  ctx.fillText("This certifies that", width / 2, 260);
+
+  ctx.fillStyle = "#f0ead8";
+  ctx.font = "800 54px Rajdhani, sans-serif";
+  ctx.fillText(team, width / 2, 340);
+
+  ctx.fillStyle = accent;
+  ctx.font = "800 34px Orbitron, sans-serif";
+  ctx.fillText(`🏆 ${placeLabel.toUpperCase()}`, width / 2, 420);
+
+  ctx.fillStyle = "#a8a48c";
+  ctx.font = "500 22px Rajdhani, sans-serif";
+  ctx.fillText(`${matchName} · ${points} points`, width / 2, 470);
+
+  ctx.font = "500 16px Rajdhani, sans-serif";
+  ctx.fillText(
+    new Date().toLocaleDateString([], { year: "numeric", month: "long", day: "numeric" }),
+    width / 2,
+    height - 70
+  );
+
+  ctx.textAlign = "left";
+
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `fragify-certificate-${team.replace(/\s+/g, "-").toLowerCase()}.png`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, "image/png");
 }
 
 /* ---------- Live room credentials ---------- */
@@ -553,6 +791,14 @@ el("navMyTeamsBtn").addEventListener("click", () => {
   showDashboardView();
 });
 el("dashboardBackBtn").addEventListener("click", showPublicView);
+
+el("navInstallBtn").addEventListener("click", async () => {
+  setDrawerOpen(false);
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+});
 
 async function handleGoogleCredential(response) {
   try {
@@ -1436,6 +1682,65 @@ function closeModal() {
 el("modalClose").addEventListener("click", closeModal);
 modal.querySelector(".modal__backdrop").addEventListener("click", closeModal);
 
+/* ---------- Report a player ---------- */
+/* Open to anyone, no sign-in required — a fair-play concern shouldn't wait on an
+   account. The match dropdown is filled from whatever's currently live so a report
+   can be pinned to the right lobby without typing an id. */
+const reportModal = el("reportModal");
+const reportForm = el("reportForm");
+
+function setReportAlert(msg) {
+  const alert = el("reportAlert");
+  alert.textContent = msg || "";
+  alert.hidden = !msg;
+}
+
+function openReportModal() {
+  setReportAlert("");
+  const select = el("reportMatch");
+  select.innerHTML =
+    `<option value="">Not sure / general</option>` +
+    matches.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join("");
+  reportForm.reset();
+  reportModal.hidden = false;
+}
+
+el("openReportBtn").addEventListener("click", openReportModal);
+reportModal.querySelector(".modal__close").addEventListener("click", () => {
+  reportModal.hidden = true;
+});
+reportModal.querySelector(".modal__backdrop").addEventListener("click", () => {
+  reportModal.hidden = true;
+});
+
+reportForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setReportAlert("");
+
+  const matchId = el("reportMatch").value;
+  const match = matches.find((m) => m.id === matchId);
+  const saveBtn = el("reportSaveBtn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Submitting…";
+
+  try {
+    await API.reportPlayer({
+      matchId: matchId || null,
+      matchName: match ? match.name : null,
+      reporterTeam: el("reportYourTeam").value.trim(),
+      reportedPlayer: el("reportPlayer").value.trim(),
+      reason: el("reportReason").value.trim(),
+    });
+    reportModal.hidden = true;
+    alert("✅ Report submitted — thanks for flagging it. Admins have been notified.");
+  } catch (err) {
+    setReportAlert(err.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Submit Report";
+  }
+});
+
 /* ---------- Admin panel (?admin=true) ---------- */
 let adminKey = null;
 
@@ -1480,6 +1785,7 @@ const ACC_LOADERS = {
   accRegs: () => renderRegistrations(),
   accDetails: () => prefillDetailsForm(),
   accResults: () => renderResultsEditor(),
+  accReports: () => renderReportsList(),
 };
 
 async function openAccSection(id) {
@@ -2066,6 +2372,47 @@ el("regList").addEventListener("click", async (e) => {
     else await API.cancelRegistration(matchId, slot, adminKey);
     await renderRegistrations();
     await renderSlots();
+  } catch (err) {
+    alert("❌ " + err.message);
+    btn.disabled = false;
+  }
+});
+
+/* ---------- Admin: player reports ---------- */
+async function renderReportsList() {
+  const box = el("reportsList");
+  box.innerHTML = "<p style='text-align:center;color:var(--muted)'>Loading…</p>";
+  try {
+    const { reports } = await API.listReports(adminKey);
+    box.innerHTML = reports.length
+      ? reports.map((r) => `
+        <div style="border-bottom:1px solid var(--border);padding:12px 0" data-report-id="${escapeHtml(r.id)}">
+          <strong style="color:var(--accent)">${escapeHtml(r.reportedPlayer)}</strong>
+          <span class="reg-badge ${r.status === "resolved" ? "is-verified" : "is-pending"}">${r.status === "resolved" ? "RESOLVED" : "OPEN"}</span><br/>
+          Match: ${escapeHtml(r.matchName || r.matchId || "—")} · Reported by: ${escapeHtml(r.reporterTeam)}<br/>
+          ${escapeHtml(r.reason)}<br/>
+          <small style="color:var(--muted)">${new Date(r.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</small>
+          <div class="reg-acts">
+            ${r.status !== "resolved" ? `<button class="reg-act reg-act--ok" data-report-act="resolve">✅ Mark Resolved</button>` : ""}
+            <button class="reg-act reg-act--danger" data-report-act="delete">🗑️ Delete</button>
+          </div>
+        </div>`).join("")
+      : "<p style='text-align:center;color:var(--muted)'>No reports filed yet.</p>";
+  } catch (err) {
+    box.innerHTML = `<p style="text-align:center;color:var(--danger)">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+el("reportsList").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-report-act]");
+  if (!btn) return;
+  const id = btn.closest("[data-report-id]")?.dataset.reportId;
+  if (!id) return;
+  btn.disabled = true;
+  try {
+    if (btn.dataset.reportAct === "resolve") await API.resolveReport(id, adminKey);
+    else await API.deleteReport(id, adminKey);
+    await renderReportsList();
   } catch (err) {
     alert("❌ " + err.message);
     btn.disabled = false;

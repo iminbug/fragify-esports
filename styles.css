@@ -645,6 +645,7 @@ body {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
   gap: 16px; margin-top: 26px;
 }
+.connect__report-btn { display: block; margin: 22px auto 0; }
 .social {
   display: flex; align-items: center; gap: 14px; text-align: left;
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -1042,6 +1043,11 @@ body {
 .leaderboard__rank-2 .leaderboard__rank { border-color: #d7e1e7; color: #d7e1e7; }
 .leaderboard__rank-3 .leaderboard__rank { border-color: #d67b3d; color: #d67b3d; }
 .leaderboard__team { font-weight: 800; letter-spacing: 0.2px; }
+.leaderboard__cert-btn {
+  border: none; background: none; cursor: pointer; font-size: 0.95rem;
+  padding: 2px 4px; opacity: 0.75; vertical-align: middle;
+}
+.leaderboard__cert-btn:hover { opacity: 1; }
 .leaderboard__total { display: inline-block; min-width: 43px; padding: 4px 8px; border-radius: 3px; background: linear-gradient(105deg, var(--accent), #ff7b3a); color: #160b07; text-align: center; box-shadow: 2px 2px 0 rgba(255, 194, 71, .32); }
 .results-editor { min-width: 720px; }
 .results-editor small { color: var(--muted); font-family: "Rajdhani", sans-serif; font-size: 0.8rem; }

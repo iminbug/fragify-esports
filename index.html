@@ -7,6 +7,11 @@
   <title>Fragify Esports — BGMI Tournament Registration</title>
   <meta name="description" content="Register your squad for the Fragify Esports BGMI tournaments. Pick your match time — limited slots per match. First come, first frag." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230b0c08'/><g fill='none' stroke='%23ff9b21' stroke-width='4' stroke-linecap='round'><circle cx='32' cy='32' r='15'/><path d='M32 7v11M32 46v11M7 32h11M46 32h11'/></g><circle cx='32' cy='32' r='4' fill='%23ffd54a'/></svg>" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Fragify" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -56,11 +61,13 @@
 
     <nav class="nav__drawer" id="navDrawer" aria-label="Site navigation">
       <div class="nav__drawer-links">
-        <a href="#register" class="nav__link" data-nav-close>📝 Register</a>
-        <a href="#detailsSection" class="nav__link" data-nav-close>📋 Details</a>
-        <a href="#leaderboardSection" class="nav__link" data-nav-close>🏆 Leaderboard</a>
-        <a href="#connect" class="nav__link" data-nav-close>📣 Connect</a>
-        <button type="button" class="nav__link nav__link--accent" id="navMyTeamsBtn" hidden>🗂️ My Teams</button>
+        <a href="#register" class="nav__link" data-nav-close data-i18n="nav.register">📝 Register</a>
+        <a href="#detailsSection" class="nav__link" data-nav-close data-i18n="nav.details">📋 Details</a>
+        <a href="#leaderboardSection" class="nav__link" data-nav-close data-i18n="nav.leaderboard">🏆 Leaderboard</a>
+        <a href="#connect" class="nav__link" data-nav-close data-i18n="nav.connect">📣 Connect</a>
+        <button type="button" class="nav__link nav__link--accent" id="navMyTeamsBtn" hidden data-i18n="nav.myTeams">🗂️ My Teams</button>
+        <button type="button" class="nav__link nav__link--accent" id="navInstallBtn" hidden data-i18n="nav.install">📲 Install App</button>
+        <button type="button" class="nav__link" id="navLangBtn">🌐 हिंदी</button>
       </div>
       <div class="nav__status" id="navStatus">
         <span class="dot"></span>
@@ -71,7 +78,7 @@
         <div class="auth__signed-in" id="authSignedIn" hidden>
           <img class="auth__avatar" id="authUserAvatar" alt="" referrerpolicy="no-referrer" hidden />
           <span class="auth__name" id="authUserName"></span>
-          <button type="button" class="auth__signout" id="authSignOutBtn">Sign out</button>
+          <button type="button" class="auth__signout" id="authSignOutBtn" data-i18n="auth.signOut">Sign out</button>
         </div>
       </div>
     </nav>
@@ -85,12 +92,12 @@
     </section>
     <!-- HERO -->
     <section class="hero">
-      <p class="hero__eyebrow">// SEASON 01 ·  SQUAD SHOWDOWN</p>
+      <p class="hero__eyebrow" data-i18n="hero.eyebrow">// SEASON 01 ·  SQUAD SHOWDOWN</p>
       <h1 class="hero__title">
-        REGISTER YOUR SQUAD.<br />
-        <span class="accent">CLAIM YOUR SLOT.</span>
+        <span data-i18n="hero.titleLine1">REGISTER YOUR SQUAD.</span><br />
+        <span class="accent" data-i18n="hero.titleLine2">CLAIM YOUR SLOT.</span>
       </h1>
-      <p class="hero__sub">
+      <p class="hero__sub" data-i18n-html="hero.subtitle">
         Multiple matches, <strong>limited slots each</strong>. Pick your match time,
         lock in your squad, get your slot number, and join the WhatsApp community for
         your room ID &amp; password. <strong>Winner Winner Chicken Dinner</strong> awaits. 🍗
@@ -108,12 +115,12 @@
       </div>
 
       <div class="hero__actions">
-        <a href="#register" class="btn btn--primary" id="heroCta">Register Now →</a>
+        <a href="#register" class="btn btn--primary" id="heroCta" data-i18n="hero.ctaRegister">Register Now →</a>
         <!-- The open community: announcements, scrims and results, joinable by anyone.
              Deliberately NOT the invite an admin sets in the panel — that one is still
              handed over only once a team's entry fee is verified. Two links, two jobs. -->
         <a href="https://chat.whatsapp.com/ELLWjH90FlMI4vjxHe5sR0" target="_blank" rel="noopener"
-           class="btn btn--whatsapp">💬 Join Community</a>
+           class="btn btn--whatsapp" data-i18n="hero.ctaCommunity">💬 Join Community</a>
       </div>
     </section>
 
@@ -121,40 +128,40 @@
     <section class="cards">
       <div class="card">
         <div class="card__icon">🪖</div>
-        <h3>Limited Slots</h3>
-        <p>Every match has a hard cap. When the last squad registers, that lobby auto-locks. No exceptions.</p>
+        <h3 data-i18n="cards.limited.title">Limited Slots</h3>
+        <p data-i18n="cards.limited.desc">Every match has a hard cap. When the last squad registers, that lobby auto-locks. No exceptions.</p>
       </div>
       <div class="card">
         <div class="card__icon">🎯</div>
-        <h3>Instant Slot</h3>
-        <p>Your slot number is assigned the second you register. Shown on screen instantly.</p>
+        <h3 data-i18n="cards.instant.title">Instant Slot</h3>
+        <p data-i18n="cards.instant.desc">Your slot number is assigned the second you register. Shown on screen instantly.</p>
       </div>
       <div class="card">
         <div class="card__icon">📦</div>
-        <h3>Room ID &amp; Pass</h3>
-        <p>Get the WhatsApp community invite with your room ID &amp; password after registering.</p>
+        <h3 data-i18n="cards.room.title">Room ID &amp; Pass</h3>
+        <p data-i18n="cards.room.desc">Get the WhatsApp community invite with your room ID &amp; password after registering.</p>
       </div>
     </section>
 
     <!-- ROOM CREDENTIALS (admin-posted, unlocked with Team ID + password, 10-min life) -->
     <section class="leaderboard" id="leaderboardSection" hidden>
       <div class="section__head">
-        <p class="section__eyebrow">Match Results</p>
-        <h2><span class="leaderboard__trophy">🏆</span> Top 8 Leaderboard</h2>
+        <p class="section__eyebrow" data-i18n="leaderboard.eyebrow">Match Results</p>
+        <h2><span class="leaderboard__trophy">🏆</span> <span data-i18n="leaderboard.title">Top 8 Leaderboard</span></h2>
         <p id="leaderboardMatch"></p>
       </div>
       <div class="leaderboard__meta">
-        <span class="leaderboard__live"><i></i> Published Results</span>
+        <span class="leaderboard__live"><i></i> <span data-i18n="leaderboard.published">Published Results</span></span>
         <span id="leaderboardUpdated"></span>
       </div>
       <div class="leaderboard__points" aria-label="Point system">
-        <span class="leaderboard__points-label">Point System</span>
-        <span>Placement: 1st 10 · 2nd 6 · 3rd 5 · 4th 4 · 5th 3 · 6th 2 · 7th-8th 1</span>
-        <span>Kills: +1 each</span>
+        <span class="leaderboard__points-label" data-i18n="leaderboard.pointSystem">Point System</span>
+        <span data-i18n="leaderboard.placementPoints">Placement: 1st 10 · 2nd 6 · 3rd 5 · 4th 4 · 5th 3 · 6th 2 · 7th-8th 1</span>
+        <span data-i18n="leaderboard.killPoints">Kills: +1 each</span>
       </div>
       <div class="leaderboard__table-wrap">
         <table class="leaderboard__table">
-          <thead><tr><th>Rank</th><th>Slot</th><th>Team</th><th>WWCD</th><th>Placement</th><th>Kills</th><th>Total</th></tr></thead>
+          <thead><tr><th data-i18n="leaderboard.colRank">Rank</th><th data-i18n="leaderboard.colSlot">Slot</th><th data-i18n="leaderboard.colTeam">Team</th><th>WWCD</th><th data-i18n="leaderboard.colPlacement">Placement</th><th data-i18n="leaderboard.colKills">Kills</th><th data-i18n="leaderboard.colTotal">Total</th></tr></thead>
           <tbody id="leaderboardRows"></tbody>
         </table>
       </div>
@@ -164,7 +171,7 @@
     <section class="room" id="roomBanner" hidden>
       <div class="room__card">
         <div class="room__head">
-          <span class="room__badge"><span class="dot"></span> Room is Open</span>
+          <span class="room__badge"><span class="dot"></span> <span data-i18n="room.open">Room is Open</span></span>
           <span class="room__timer" id="roomTimer" hidden>10:00</span>
         </div>
 
@@ -177,16 +184,16 @@
           </p>
           <div class="room__gate-fields">
             <div class="field">
-              <label for="unlockId">Team ID</label>
+              <label for="unlockId" data-i18n="field.teamId">Team ID</label>
               <input type="text" id="unlockId" placeholder="FRG-M1-006" autocomplete="off" />
             </div>
             <div class="field">
-              <label for="unlockPass">Password</label>
+              <label for="unlockPass" data-i18n="field.password">Password</label>
               <input type="text" id="unlockPass" placeholder="6-character password" autocomplete="off" />
             </div>
           </div>
           <p class="form__alert" id="unlockAlert" role="alert" hidden></p>
-          <button type="submit" class="btn btn--primary room__gate-btn" id="unlockBtn">
+          <button type="submit" class="btn btn--primary room__gate-btn" id="unlockBtn" data-i18n="room.unlockBtn">
             Unlock Room Details
           </button>
         </form>
@@ -196,18 +203,18 @@
           <p class="room__team" id="roomTeam"></p>
           <div class="room__creds">
             <div class="room__row">
-              <span class="room__label">Room ID</span>
+              <span class="room__label" data-i18n="field.roomId">Room ID</span>
               <span class="room__value" id="roomId">—</span>
             </div>
             <div class="room__row">
-              <span class="room__label">Password</span>
+              <span class="room__label" data-i18n="field.password">Password</span>
               <span class="room__value" id="roomPass">—</span>
             </div>
           </div>
-          <p class="room__note">⚡ Take a screenshot — these details disappear on their own when the timer runs out.</p>
-          <button type="button" class="btn btn--primary room__checkin" id="checkInBtn">Check In for Match</button>
+          <p class="room__note" data-i18n="room.screenshotNote">⚡ Take a screenshot — these details disappear on their own when the timer runs out.</p>
+          <button type="button" class="btn btn--primary room__checkin" id="checkInBtn" data-i18n="room.checkInBtn">Check In for Match</button>
           <p class="room__note" id="checkInStatus" hidden></p>
-          <button type="button" class="room__lock" id="roomLockBtn">Lock again</button>
+          <button type="button" class="room__lock" id="roomLockBtn" data-i18n="room.lockAgain">Lock again</button>
         </div>
       </div>
     </section>
@@ -217,7 +224,7 @@
     <section class="pay" id="paymentSection" hidden>
       <div class="pay__card">
         <div class="pay__head">
-          <span class="pay__badge">💳 Entry Fee</span>
+          <span class="pay__badge" data-i18n="pay.badge">💳 Entry Fee</span>
           <span class="pay__amount" id="payAmount">₹0</span>
         </div>
 
@@ -230,16 +237,16 @@
           </p>
           <div class="pay__gate-fields">
             <div class="field">
-              <label for="payId">Team ID</label>
+              <label for="payId" data-i18n="field.teamId">Team ID</label>
               <input type="text" id="payId" placeholder="FRG-M1-006" autocomplete="off" />
             </div>
             <div class="field">
-              <label for="payPass">Password</label>
+              <label for="payPass" data-i18n="field.password">Password</label>
               <input type="text" id="payPass" placeholder="6-character password" autocomplete="off" />
             </div>
           </div>
           <p class="form__alert" id="payGateAlert" role="alert" hidden></p>
-          <button type="submit" class="btn btn--primary pay__gate-btn" id="payGateBtn">
+          <button type="submit" class="btn btn--primary pay__gate-btn" id="payGateBtn" data-i18n="pay.checkStatusBtn">
             Check My Payment Status
           </button>
         </form>
@@ -324,19 +331,19 @@
     <!-- MATCH DETAILS (filled from the admin panel; hidden until something is set) -->
     <section class="details" id="detailsSection" hidden>
       <div class="details__head">
-        <h2>Match Details</h2>
-        <p>Everything you need to know before the drop.</p>
+        <h2 data-i18n="details.title">Match Details</h2>
+        <p data-i18n="details.subtitle">Everything you need to know before the drop.</p>
       </div>
 
       <div class="detail-grid" id="detailGrid"></div>
 
       <div class="prizes" id="prizeBox" hidden>
-        <h3 class="prizes__title">🏆 Prize Breakdown</h3>
+        <h3 class="prizes__title" data-i18n="details.prizeTitle">🏆 Prize Breakdown</h3>
         <div class="prizes__row" id="prizeList"></div>
       </div>
 
       <div class="rules" id="rulesBox" hidden>
-        <h3 class="rules__title">⚠️ Mandatory Rules</h3>
+        <h3 class="rules__title" data-i18n="details.rulesTitle">⚠️ Mandatory Rules</h3>
         <ul class="rules__list" id="rulesList"></ul>
       </div>
     </section>
@@ -345,7 +352,7 @@
          fee is settled. -->
     <section class="board" id="boardSection" hidden>
       <div class="board__head">
-        <h2>Confirmed Teams</h2>
+        <h2 data-i18n="board.title">Confirmed Teams</h2>
         <p id="boardSub">A team's name appears on its slot as soon as the entry fee is verified.</p>
       </div>
       <div id="boardsWrap"></div>
@@ -354,42 +361,42 @@
     <!-- REGISTRATION -->
     <section class="register" id="register">
       <div class="register__head">
-        <h2>Team Registration</h2>
-        <p>Fill in your squad details. One entry per team. Signing in with Google is optional — it just unlocks the My Teams dashboard.</p>
+        <h2 data-i18n="register.title">Team Registration</h2>
+        <p data-i18n="register.subtitle">Fill in your squad details. One entry per team. Signing in with Google is optional — it just unlocks the My Teams dashboard.</p>
       </div>
 
       <form id="regForm" class="form" novalidate>
         <!-- One card per match that is open and has seats left. app.js rebuilds this
              on every poll; picking one decides which lobby the slot comes from. -->
         <div class="field" id="matchField">
-          <label>Choose Your Match <span class="req">*</span></label>
+          <label data-i18n-html="register.chooseMatch">Choose Your Match <span class="req">*</span></label>
           <div class="match-choice" id="matchChoice"></div>
           <small class="field__error" id="matchChoiceError"></small>
         </div>
 
         <div class="field">
-          <label for="teamName">Team Name <span class="req">*</span></label>
+          <label for="teamName" data-i18n-html="register.teamName">Team Name <span class="req">*</span></label>
           <input type="text" id="teamName" name="teamName" placeholder="e.g. Team Phantom" autocomplete="off" required />
           <small class="field__error" data-for="teamName"></small>
         </div>
 
         <div class="field">
-          <label for="leaderName">Team Leader (IGN) <span class="req">*</span></label>
+          <label for="leaderName" data-i18n-html="register.leaderName">Team Leader (IGN) <span class="req">*</span></label>
           <input type="text" id="leaderName" name="leaderName" placeholder="In-game name of captain" autocomplete="off" required />
           <small class="field__error" data-for="leaderName"></small>
         </div>
 
         <div class="field">
-          <label for="phone">WhatsApp Number <span class="req">*</span></label>
+          <label for="phone" data-i18n-html="register.phone">WhatsApp Number <span class="req">*</span></label>
           <input type="tel" id="phone" name="phone" placeholder="10-digit mobile number" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required />
           <small class="field__error" data-for="phone"></small>
         </div>
 
         <fieldset class="squad">
-          <legend class="squad__legend">
+          <legend class="squad__legend" data-i18n-html="register.squadLegend">
             Squad Members <span class="squad__optional">Optional</span>
           </legend>
-          <p class="squad__hint">The leader is Player 1. Add the rest of your squad now, or share their IGNs in the community later.</p>
+          <p class="squad__hint" data-i18n="register.squadHint">The leader is Player 1. Add the rest of your squad now, or share their IGNs in the community later.</p>
 
           <div class="field">
             <label for="member2">Player 2 (IGN)</label>
@@ -416,10 +423,10 @@
         <p class="form__alert" id="formAlert" role="alert" hidden></p>
         <p class="form__fee" id="formFeeNote" hidden></p>
 
-        <button type="submit" class="btn btn--primary form__submit" id="submitBtn">
+        <button type="submit" class="btn btn--primary form__submit" id="submitBtn" data-i18n="register.submit">
           Lock My Slot →
         </button>
-        <p class="form__note">By registering you agree to the tournament rules &amp; fair-play policy.</p>
+        <p class="form__note" data-i18n="register.agree">By registering you agree to the tournament rules &amp; fair-play policy.</p>
       </form>
 
       <!-- CLOSED STATE (hidden until full, or closed early by an admin) -->
@@ -433,8 +440,8 @@
     <!-- CONNECT -->
     <section class="connect" id="connect">
       <div class="connect__head">
-        <h2>Squad Up With Us</h2>
-        <p>Live streams, highlights and tournament updates — plus a direct line if you're stuck.</p>
+        <h2 data-i18n="connect.title">Squad Up With Us</h2>
+        <p data-i18n="connect.subtitle">Live streams, highlights and tournament updates — plus a direct line if you're stuck.</p>
       </div>
 
       <div class="socials">
@@ -470,6 +477,8 @@
           </span>
         </a>
       </div>
+
+      <button type="button" class="btn btn--ghost connect__report-btn" id="openReportBtn" data-i18n="connect.reportBtn">🚩 Report a Player</button>
     </section>
   </main>
 
@@ -484,16 +493,16 @@
         <div class="dashboard__profile">
           <img class="dashboard__avatar" id="dashProfileAvatar" alt="" referrerpolicy="no-referrer" hidden />
           <div>
-            <p class="section__eyebrow">Signed in with Google</p>
+            <p class="section__eyebrow" data-i18n="dashboard.eyebrow">Signed in with Google</p>
             <h2 class="dashboard__profile-name" id="dashProfileName">My Teams</h2>
             <p class="dashboard__profile-email" id="dashProfileEmail"></p>
           </div>
         </div>
-        <button type="button" class="dashboard__back" id="dashboardBackBtn">← Back to site</button>
+        <button type="button" class="dashboard__back" id="dashboardBackBtn" data-i18n="dashboard.back">← Back to site</button>
       </div>
-      <p class="dashboard__hint">Every team you've registered, in one place — points, community invite and room details all update here automatically.</p>
+      <p class="dashboard__hint" data-i18n="dashboard.hint">Every team you've registered, in one place — points, community invite and room details all update here automatically.</p>
       <div class="dash-cards" id="dashboardCards"></div>
-      <p class="dash-empty" id="dashboardEmpty" hidden>You haven't registered a team yet — do that on the site and it'll show up here.</p>
+      <p class="dash-empty" id="dashboardEmpty" hidden data-i18n="dashboard.empty">You haven't registered a team yet — do that on the site and it'll show up here.</p>
     </div>
   </section>
 
@@ -501,28 +510,28 @@
   <div class="modal" id="successModal" hidden>
     <div class="modal__backdrop"></div>
     <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="modal__badge">✅ You're In!</div>
+      <div class="modal__badge" data-i18n="modal.badge">✅ You're In!</div>
       <h2 id="modalTitle">Slot <span class="accent" id="slotNumber">#00</span> is yours</h2>
       <p class="modal__team" id="modalTeam">Team Phantom</p>
       <p class="modal__match" id="modalMatch"></p>
 
       <div class="creds">
         <div class="creds__row">
-          <span class="creds__label">Team ID</span>
+          <span class="creds__label" data-i18n="field.teamId">Team ID</span>
           <span class="creds__value" id="credId">FRG-M1-000</span>
         </div>
         <div class="creds__row" id="credPassRow" hidden>
-          <span class="creds__label">Password</span>
+          <span class="creds__label" data-i18n="field.password">Password</span>
           <span class="creds__value" id="credPass">••••••</span>
         </div>
       </div>
 
-      <a href="#" target="_blank" rel="noopener" class="btn btn--whatsapp" id="waLink" hidden>
+      <a href="#" target="_blank" rel="noopener" class="btn btn--whatsapp" id="waLink" hidden data-i18n="modal.joinCommunity">
         💬 Join WhatsApp Community
       </a>
       <p class="modal__hint" id="modalHint">Your Google account is how you'll find this team again — check the My Teams section any time.</p>
       <p class="modal__pay" id="modalPayNote" hidden></p>
-      <button class="modal__close" id="modalClose">Done</button>
+      <button class="modal__close" id="modalClose" data-i18n="modal.done">Done</button>
     </div>
   </div>
 
@@ -677,6 +686,17 @@
             </div>
             <div class="admin-reg-summary" id="regSummary" aria-live="polite"></div>
             <div class="admin-acc__scroll" id="regList"></div>
+          </div>
+        </section>
+
+        <!-- PLAYER REPORTS -->
+        <section class="admin-acc__item">
+          <button type="button" class="admin-btn admin-acc__head" data-acc="accReports">
+            <span>🚩 Player Reports</span><span class="admin-acc__chev" aria-hidden="true">▾</span>
+          </button>
+          <div class="admin-acc__body" id="accReports" hidden>
+            <p class="admin-acc__hint">Anyone can file one of these, no sign-in needed — that's by design, so a genuine fair-play concern is never blocked by an account.</p>
+            <div class="admin-acc__scroll" id="reportsList"></div>
           </div>
         </section>
 
@@ -843,6 +863,37 @@
         </button>
       </form>
 
+      <button class="modal__close">Cancel</button>
+    </div>
+  </div>
+
+  <!-- REPORT A PLAYER — open to anyone, no sign-in needed; a fair-play concern
+       shouldn't wait on an account. Goes straight to the admin's alert channels. -->
+  <div class="modal" id="reportModal" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__card">
+      <h2>🚩 Report a Player</h2>
+      <p class="modal__sub">Seen cheating, teaming or abuse? Tell us what happened — this goes straight to the admins.</p>
+      <form id="reportForm" class="details-form">
+        <div class="field">
+          <label for="reportMatch">Match</label>
+          <select id="reportMatch"></select>
+        </div>
+        <div class="field">
+          <label for="reportYourTeam">Your Team Name <span>(optional)</span></label>
+          <input type="text" id="reportYourTeam" maxlength="60" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="reportPlayer">Reported Player's IGN <span class="req">*</span></label>
+          <input type="text" id="reportPlayer" maxlength="60" autocomplete="off" required />
+        </div>
+        <div class="field">
+          <label for="reportReason">What happened? <span class="req">*</span></label>
+          <textarea id="reportReason" rows="4" maxlength="400" required placeholder="Be specific — time in the match, what you saw, slot/team if known."></textarea>
+        </div>
+        <p class="form__alert" id="reportAlert" role="alert" hidden></p>
+        <button type="submit" class="btn btn--primary details-form__submit" id="reportSaveBtn">Submit Report</button>
+      </form>
       <button class="modal__close">Cancel</button>
     </div>
   </div>

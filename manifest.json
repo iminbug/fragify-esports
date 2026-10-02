@@ -1,0 +1,14 @@
+{
+  "name": "Fragify Esports",
+  "short_name": "Fragify",
+  "description": "Register your squad for Fragify Esports BGMI tournaments and manage your team.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0c08",
+  "theme_color": "#0b0c08",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
